@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "MLKitTranslationExpo58",
+    "slug": "mlkit-translation-fixture-expo-sdk-58",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.mlkittranslation.fixtureexposdk58"
+    },
+    "android": {
+      "package": "com.mlkittranslation.fixtureexposdk58",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    }
+  }
+}

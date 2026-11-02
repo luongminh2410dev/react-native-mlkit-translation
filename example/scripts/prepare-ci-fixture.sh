@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # CI helper for .github/workflows/native-fixtures.yml: installs the packed library into the committed fixture named by
-# $FIXTURE, or generates one for $RN_VERSION when $FIXTURE is "generated". Writes the fixture path to $GITHUB_OUTPUT.
+# $FIXTURE, or generates one for $RN_VERSION when $FIXTURE is "generated". An Expo fixture (expo-*) then gets its
+# android/ and ios/ projects from `expo prebuild`; the workflow installs the pods. Writes the fixture path to
+# $GITHUB_OUTPUT.
 set -euo pipefail
 
 example_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,5 +17,8 @@ if [ "$FIXTURE" = "generated" ]; then
 else
   # Packs the library first: the fixture lockfile references the tarball, so `npm ci` cannot run before it exists.
   "$example_dir/scripts/install-library-into-fixtures.sh" "$example_dir/$FIXTURE"
+  case "$FIXTURE" in
+    expo-*) (cd "$example_dir/$FIXTURE" && CI=1 npx expo prebuild --clean --no-install) ;;
+  esac
   echo "dir=example/$FIXTURE" >> "$GITHUB_OUTPUT"
 fi

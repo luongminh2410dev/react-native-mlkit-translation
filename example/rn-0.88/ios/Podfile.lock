@@ -1860,7 +1860,7 @@ PODS:
     - React-utils (= 0.88.1)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.88.1)
-  - RNMLKitTranslation (0.1.0):
+  - RNMLKitTranslation (0.1.2):
     - GoogleMLKit/Translate (= 9.0.0)
     - hermes-engine
     - RCTRequired
@@ -2270,7 +2270,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 3840312f5071bb6b953b35a029c5c6dcf06b435e
   ReactCommon: b63ce798b898ed77c6cfdeb80b18080161f52ed5
   ReactNativeDependencies: a5164c3ebbe90d992022b5d9cbabbf770a6d7d05
-  RNMLKitTranslation: 2f4cb238d6087d65a48d64a128ce1fba07cc7de3
+  RNMLKitTranslation: 59ac7f8e7f5d60d786009f20c1f97801226c22b1
   SocketRocket: 37aec555668fb852ec12e3c0de59a86ca58f0871
   SSZipArchive: 8a6ee5677c8e304bebc109e39cf0da91ccef22ea
   Yoga: d1c536142c5ff8ec8cd856ab2a7c227a1d875c8e

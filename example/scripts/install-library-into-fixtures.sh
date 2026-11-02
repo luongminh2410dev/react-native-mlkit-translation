@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Packs the library from the repository root and installs the tarball plus the shared screen into fixtures.
-# Usage: example/scripts/install-library-into-fixtures.sh [fixture-dir ...]   (default: every rn-* fixture)
-# Run `pod install` in the fixture's ios/ directory afterwards for iOS builds.
+# Usage: example/scripts/install-library-into-fixtures.sh [fixture-dir ...]   (default: every rn-* and expo-* fixture)
+# Run `pod install` in the fixture's ios/ directory afterwards for iOS builds; in an Expo fixture, run
+# `npx expo prebuild --clean` instead (it generates android/ and ios/ and installs the pods).
 set -euo pipefail
 
 example_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +15,7 @@ packed="$(cd "$repo_dir" && npm pack --ignore-scripts --pack-destination "$tarba
 mv "$tarball_dir/$packed" "$tarball"
 
 if [ "$#" -eq 0 ]; then
-  set -- "$example_dir"/rn-*
+  set -- "$example_dir"/rn-* "$example_dir"/expo-*
 fi
 
 for fixture in "$@"; do

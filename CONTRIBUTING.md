@@ -24,7 +24,7 @@ npm pack --dry-run --ignore-scripts
 - iOS: `ios/MLKitTranslation.mm`, built through `RNMLKitTranslation.podspec`.
 - Keep error codes identical in `src/translation-error.js`, `src/index.d.ts`, the Kotlin module, and the `.mm` file.
 
-Kotlin tests and native builds run inside an example fixture (`example/rn-0.88/`), because `android/` and `ios/` are not standalone projects. See [example/README.md](example/README.md).
+Kotlin tests and native builds run inside an example fixture (`example/rn-0.88/`; the Expo fixture `example/expo-sdk-58/` checks the Expo setup), because `android/` and `ios/` are not standalone projects. See [example/README.md](example/README.md).
 
 ## Pull requests
 

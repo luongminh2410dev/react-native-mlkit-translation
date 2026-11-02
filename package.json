@@ -1,7 +1,7 @@
 {
   "name": "react-native-mlkit-translation",
-  "version": "0.1.1",
-  "description": "On-device text translation for React Native with Google ML Kit: 59 languages, offline after the model download, one shared translator and a FIFO queue. TurboModule for Android and iOS.",
+  "version": "0.1.2",
+  "description": "On-device text translation for React Native with Google ML Kit: download the models of any of 59 languages, then translate between them offline. TurboModule for Android and iOS.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "files": [

@@ -1,7 +1,7 @@
 name: Native fixtures
 
-# Manual only: builds a fixture against the packed library on Android (with the Kotlin unit tests) and iOS
-# (simulator build).
+# Manual only: builds a fixture against the packed library on Android (with the Kotlin unit tests, except in an Expo
+# fixture) and iOS (simulator build).
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +9,7 @@ on:
         description: Committed fixture under example/, or "generated" to create one for react_native_version
         required: true
         type: choice
-        options: [rn-0.88, generated]
+        options: [rn-0.88, expo-sdk-58, generated]
       react_native_version:
         description: React Native version (0.76+) for a generated fixture, e.g. 0.83.1
         required: false
@@ -35,8 +35,10 @@ jobs:
           FIXTURE: ${{ inputs.fixture }}
           RN_VERSION: ${{ inputs.react_native_version }}
         run: example/scripts/prepare-ci-fixture.sh
-      # Kotlin tests are not in the tarball, so they build the library from the repository sources.
+      # Kotlin tests are not in the tarball, so they build the library from the repository sources (React Native CLI
+      # fixtures only: an Expo fixture has no useLibrarySource switch).
       - name: Kotlin unit tests
+        if: ${{ !startsWith(inputs.fixture, 'expo-') }}
         working-directory: ${{ steps.fixture.outputs.dir }}/android
         run: ./gradlew --no-daemon -PuseLibrarySource=true :react-native-mlkit-translation:testDebugUnitTest
       - name: Build against the packed library

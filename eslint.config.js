@@ -10,8 +10,9 @@ module.exports = [
     files: ['src/**/*.js'],
     languageOptions: {
       sourceType: 'module',
-      // Metro supports CommonJS `require` inside ES modules; used to load the Codegen spec lazily.
-      globals: { require: 'readonly' }
+      // Metro supports CommonJS `require` inside ES modules; used to load the Codegen spec lazily. React Native provides
+      // `setTimeout`, used to rethrow a model state listener's error.
+      globals: { require: 'readonly', setTimeout: 'readonly' }
     }
   },
   {

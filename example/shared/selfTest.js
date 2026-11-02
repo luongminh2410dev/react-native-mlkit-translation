@@ -1,17 +1,20 @@
 import {
   deleteModel,
+  downloadModel,
   downloadModels,
   getDownloadedModels,
   getModelState,
+  isModelDownloaded,
   ModelStatus,
   prepareTranslator,
   releaseTranslator,
+  subscribeModelState,
   translate,
   TranslateLanguage,
   TranslationErrorCode
 } from 'react-native-mlkit-translation';
 
-const { ENGLISH, JAPANESE, VIETNAMESE } = TranslateLanguage;
+const { ENGLISH, FRENCH, JAPANESE, KOREAN, VIETNAMESE } = TranslateLanguage;
 
 // Fixed sample sentences, not user text. Shown on screen for a quality glance; logs carry metadata only.
 const SAMPLES = {
@@ -30,6 +33,31 @@ async function expectCode(promise, code) {
     throw new Error(`expected ${code}, got ${error.code}: ${error.message}`);
   }
   throw new Error(`expected ${code}, got a result`);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Resolves once `language` has `status`, or rejects after `timeoutMs`. */
+function waitForStatus(language, status, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    if (getModelState(language).status === status) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      unsubscribe();
+      reject(new Error(`${language} never became ${status}`));
+    }, timeoutMs);
+    const unsubscribe = subscribeModelState((changed) => {
+      if (changed === language && getModelState(language).status === status) {
+        clearTimeout(timer);
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
 }
 
 function translated(result, input) {
@@ -154,6 +182,60 @@ export async function runSelfTest(onStep) {
     return {
       sample: translated(await translate({ text: SAMPLES[ENGLISH], from: ENGLISH, to: VIETNAMESE }), SAMPLES[ENGLISH])
     };
+  });
+
+  await step('deleteModel cancels a download in flight', async () => {
+    await deleteModel(FRENCH);
+    const download = downloadModel(FRENCH);
+    await waitForStatus(FRENCH, ModelStatus.DOWNLOADING);
+    await deleteModel(FRENCH);
+    await expectCode(download, TranslationErrorCode.ABORTED);
+    const status = getModelState(FRENCH).status;
+    if (status !== ModelStatus.NOT_DOWNLOADED) {
+      throw new Error(`fr state ${status}`);
+    }
+    return { detail: `ABORTED, fr=${status}` };
+  });
+
+  await step('cancelled download leaves no model', async () => {
+    // ML Kit may still finish the cancelled download; the library then deletes it again.
+    await wait(15000);
+    if (await isModelDownloaded(FRENCH)) {
+      throw new Error('fr is on the device');
+    }
+    return { detail: 'fr not on device after 15 s' };
+  });
+
+  await step('download again after cancelling, kept', async () => {
+    await downloadModel(FRENCH);
+    await wait(3000);
+    if (!(await isModelDownloaded(FRENCH))) {
+      throw new Error('fr was removed after it was requested again');
+    }
+    await deleteModel(FRENCH);
+    return { detail: 'fr kept 3 s, then deleted' };
+  });
+
+  await step('signal stops one download caller only', async () => {
+    const controller = new AbortController();
+    const aborted = downloadModel(KOREAN, { signal: controller.signal });
+    const other = downloadModel(KOREAN);
+    controller.abort();
+    await expectCode(aborted, TranslationErrorCode.ABORTED);
+    await other;
+    const status = getModelState(KOREAN).status;
+    await deleteModel(KOREAN);
+    if (status !== ModelStatus.DOWNLOADED) {
+      throw new Error(`ko state ${status}`);
+    }
+    return { detail: 'ABORTED for one, downloaded for the other' };
+  });
+
+  await step('long text en→vi', async () => {
+    const sentences = Array.from({ length: 150 }, (_, index) => `Sentence ${index + 1}: ${SAMPLES[ENGLISH]}`);
+    const text = sentences.join(' ');
+    const result = translated(await translate({ text, from: ENGLISH, to: VIETNAMESE }), text);
+    return { detail: `${text.length} chars in, ${result.length} chars out` };
   });
 
   await step('models on device after', async () => ({ detail: (await getDownloadedModels()).join(', ') }));

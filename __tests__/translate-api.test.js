@@ -104,6 +104,21 @@ describe('translate', () => {
     await expect(library.translate(request)).rejects.toMatchObject({ code: 'TRANSLATION_FAILED' });
   });
 
+  it('keeps MODEL_MANAGER_FAILED when native code cannot check the models, leaving the states alone', async () => {
+    const nativeModule = createNativeModule({
+      translate: jest.fn().mockRejectedValue(nativeError('MODEL_MANAGER_FAILED', 'io'))
+    });
+    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+
+    await expect(library.translate({ text: 'Hello', from: 'en', to: 'vi' })).rejects.toMatchObject({
+      code: 'MODEL_MANAGER_FAILED',
+      message: 'io'
+    });
+    await flushPromises();
+    expect(nativeModule.isModelDownloaded).not.toHaveBeenCalled();
+    expect(library.getModelState('vi').status).toBe('unknown');
+  });
+
   it('refreshes the model states of both languages after MODEL_NOT_DOWNLOADED', async () => {
     const nativeModule = createNativeModule({
       translate: jest.fn().mockRejectedValue(nativeError('MODEL_NOT_DOWNLOADED')),

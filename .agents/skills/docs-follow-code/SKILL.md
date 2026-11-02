@@ -12,7 +12,7 @@ Update existing behavior descriptions in the same task, nearest to farthest:
 1. JSDoc in `src/*.js` and comments in Kotlin/Objective-C++ for the changed symbol: inputs, results, error codes, side effects.
 2. `src/index.d.ts`: types for every export and returned value.
 3. `docs/`: `api-reference.md` (every export: signature, results, errors), `models-and-downloads.md`, `queue-and-memory.md`, `privacy-and-attribution.md`, `compatibility-matrix.md`, `testing-with-jest.md`.
-4. `README.md`: only what is needed to integrate right away — one-line pitch, a few features, installation with platform requirements (rebuild, `pod install`, iOS 15.5, Android minSdk), one minimal usage example, a grouped API table, links to `docs/`. Do not add more examples, options, or edge cases to the README; put them in the matching `docs/` page and link it.
+4. `README.md`: only what is needed to integrate right away — one-line pitch, a few features, a Requirements table (React Native, iOS, Android, Expo) before installation, installation steps per platform (Podfile `platform :ios`, `pod install`, `minSdkVersion`, rebuild), one minimal usage example, a grouped API table, links to `docs/`. Do not add more examples, options, or edge cases to the README; put them in the matching `docs/` page and link it.
 5. `package.json` `description` / `keywords` when the scope of the library changes.
 6. `AGENTS.md` and the skills in `.agents/skills/` when structure, tooling, scripts, or verification commands change.
 

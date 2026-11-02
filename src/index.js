@@ -37,7 +37,10 @@ async function callNative(method, args, fallbackCode) {
 }
 
 const queue = createTranslationQueue({ maxPending: MAX_PENDING_TRANSLATIONS });
-const store = createModelStore(callNative);
+const store = createModelStore(callNative, {
+  removeOrphan: (language, isStillOrphan) =>
+    queue.enqueueBarrier(() => (isStillOrphan() ? removeFromDevice(language) : undefined))
+});
 
 function assertLanguage(language) {
   if (!isTranslateLanguage(language)) {
@@ -56,6 +59,28 @@ function withLanguage(language, operation) {
     return Promise.reject(error);
   }
   return operation();
+}
+
+/**
+ * Settles like `promise`, or rejects `ABORTED` with `message` when `signal` aborts first. The work behind `promise`
+ * goes on; only this caller stops waiting.
+ */
+function followWithSignal(promise, signal, message) {
+  if (!signal) {
+    return promise;
+  }
+  return new Promise((resolve, reject) => {
+    const finish = (settle, value) => {
+      signal.removeEventListener('abort', onAbort);
+      settle(value);
+    };
+    const onAbort = () => finish(reject, new TranslationError(TranslationErrorCode.ABORTED, message));
+    signal.addEventListener('abort', onAbort);
+    promise.then(
+      (value) => finish(resolve, value),
+      (error) => finish(reject, error)
+    );
+  });
 }
 
 /** Native call that needs the translator; a missing model refreshes both states so they match the disk. */
@@ -80,8 +105,8 @@ function callWithTranslator(method, args, from, to) {
  * its late result. The text is passed through unchanged; `from === to` resolves it without native work.
  *
  * Rejects with a {@link TranslationError}: `INVALID_INPUT` for empty or whitespace-only text, `UNSUPPORTED_LANGUAGE`,
- * `MODEL_NOT_DOWNLOADED` when a non-English model is missing (never downloads it), `TRANSLATION_FAILED`, `QUEUE_FULL`,
- * `ABORTED`, `NATIVE_UNAVAILABLE`.
+ * `MODEL_NOT_DOWNLOADED` when a non-English model is missing (never downloads it), `MODEL_MANAGER_FAILED` when checking
+ * the models fails (Android), `TRANSLATION_FAILED`, `QUEUE_FULL`, `ABORTED`, `NATIVE_UNAVAILABLE`.
  */
 export function translate(request) {
   const { text, from, to, signal } = request || {};
@@ -136,7 +161,8 @@ export function releaseTranslator() {
 
 /**
  * Whether the model for `language` is on the device. Always `true` for `TranslateLanguage.ENGLISH`. Updates the model
- * state.
+ * state. An answer that arrives after a download of that language finished or its model was deleted is outdated: the
+ * current state answers instead.
  */
 export function isModelDownloaded(language) {
   return withLanguage(language, () => store.refresh(language));
@@ -150,25 +176,36 @@ export function getDownloadedModels() {
   return store.refreshAll();
 }
 
+const DOWNLOAD_ABORTED = 'This call stopped waiting for the download: its signal was aborted.';
+
 /**
  * Downloads the model for `language`. Concurrent calls for the same language share the download in flight, including
  * its network condition. With `wifiOnly: true` the download waits for an unmetered network. Resolves right away for
- * `TranslateLanguage.ENGLISH` and for a model already on the device. Rejects with `MODEL_DOWNLOAD_FAILED`; a later
- * call starts a new attempt.
+ * `TranslateLanguage.ENGLISH`. Checks the device first: a model already there resolves without a download and without
+ * showing `ModelStatus.DOWNLOADING`. Rejects with `MODEL_DOWNLOAD_FAILED`; a later call starts a new attempt.
+ *
+ * `signal` stops this caller waiting (`ABORTED`); the download goes on. {@link deleteModel} cancels it for every
+ * caller.
  */
 export function downloadModel(language, options) {
-  const wifiOnly = Boolean(options && options.wifiOnly);
-  return withLanguage(language, () => store.download(language, wifiOnly));
+  const { wifiOnly, signal } = options || {};
+  return withLanguage(language, () => {
+    if (signal && signal.aborted) {
+      return Promise.reject(new TranslationError(TranslationErrorCode.ABORTED, DOWNLOAD_ABORTED));
+    }
+    return followWithSignal(store.download(language, Boolean(wifiOnly)), signal, DOWNLOAD_ABORTED);
+  });
 }
 
 /**
  * Downloads the models of several languages at once, each like {@link downloadModel} (shared with downloads in flight,
  * same `wifiOnly` for all). Duplicates and `TranslateLanguage.ENGLISH` need no download. Validates every code before
  * starting any download. Resolves when every model is on the device. When some downloads fail, waits for the others,
- * then rejects with the first failure; each language's model state tells which ones failed.
+ * then rejects with the first failure; each language's model state tells which ones failed. `signal` stops this caller
+ * waiting (`ABORTED`); the downloads go on.
  */
 export function downloadModels(languages, options) {
-  const wifiOnly = Boolean(options && options.wifiOnly);
+  const { wifiOnly, signal } = options || {};
   try {
     if (!Array.isArray(languages)) {
       throw new TranslationError(
@@ -177,36 +214,49 @@ export function downloadModels(languages, options) {
       );
     }
     languages.forEach(assertLanguage);
+    if (signal && signal.aborted) {
+      throw new TranslationError(TranslationErrorCode.ABORTED, DOWNLOAD_ABORTED);
+    }
   } catch (error) {
     return Promise.reject(error);
   }
 
   const unique = Array.from(new Set(languages));
-  return Promise.allSettled(unique.map((language) => store.download(language, wifiOnly))).then((results) => {
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure) {
-      throw failure.reason;
+  const all = Promise.allSettled(unique.map((language) => store.download(language, Boolean(wifiOnly)))).then(
+    (results) => {
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure) {
+        throw failure.reason;
+      }
     }
-  });
+  );
+  return followWithSignal(all, signal, DOWNLOAD_ABORTED);
 }
 
 /**
- * Deletes the model for `language` from the device. Waits for a download in flight for that language and for queued
- * translations, releases the translator, then deletes. No-op for `TranslateLanguage.ENGLISH`, which ships with the SDK.
+ * Deletes the model for `language` from the device. Cancels a download in flight for that language: its callers reject
+ * `ABORTED` right away, and if ML Kit still finishes it (ML Kit offers no way to stop it), the model is removed again
+ * unless a new download of that language was requested since. Waits for queued translations, releases the translator,
+ * then deletes. Downloads of that language requested afterwards start once the deletion is done. No-op for
+ * `TranslateLanguage.ENGLISH`, which ships with the SDK.
  */
 export function deleteModel(language) {
   return withLanguage(language, () => {
     if (language === BUILT_IN_LANGUAGE) {
       return Promise.resolve();
     }
-    return store.waitForDownload(language).then(() =>
-      queue.enqueueBarrier(async () => {
-        await callNative('releaseTranslator', [], TranslationErrorCode.TRANSLATION_FAILED);
-        await callNative('deleteModel', [language], TranslationErrorCode.MODEL_MANAGER_FAILED);
-        store.markNotDownloaded(language);
-      })
-    );
+    store.cancelDownload(language);
+    const removal = queue.enqueueBarrier(() => removeFromDevice(language));
+    store.trackRemoval(language, removal);
+    return removal;
   });
+}
+
+/** Releases the translator, deletes the model, and records it. Runs as a queue barrier. */
+async function removeFromDevice(language) {
+  await callNative('releaseTranslator', [], TranslationErrorCode.TRANSLATION_FAILED);
+  await callNative('deleteModel', [language], TranslationErrorCode.MODEL_MANAGER_FAILED);
+  store.markNotDownloaded(language);
 }
 
 /**
@@ -219,7 +269,11 @@ export function getModelState(language) {
   return store.getState(language);
 }
 
-/** Calls `listener(language)` whenever the model state of a language changes. Returns the unsubscribe function. */
+/**
+ * Calls `listener(language)` whenever the model state of a language changes. Returns the unsubscribe function. A
+ * listener that throws does not stop the other listeners or the call that changed the state; its error is rethrown
+ * from a timer.
+ */
 export function subscribeModelState(listener) {
   return store.subscribe(listener);
 }

@@ -38,6 +38,7 @@ translate(request: {
 ```
 
 - Works for any two languages whose models are on the device (`ja → fr` as well as `en → vi`). The native translator switches to the requested pair when needed.
+- ML Kit translates between two non-English languages through English, which can lower the quality. Google intends on-device translation for casual and simple text; check the quality for your languages.
 - Runs in the shared FIFO queue: one translation at a time, up to 32 waiting. See [queue and memory](queue-and-memory.md).
 - `text` is passed unchanged (no trimming or normalization). Empty or whitespace-only text rejects `INVALID_INPUT`.
 - `from === to` resolves `text` without native work.
@@ -49,6 +50,7 @@ translate(request: {
 | `INVALID_INPUT` | `text` is not a string with a non-whitespace character |
 | `UNSUPPORTED_LANGUAGE` | `from` or `to` is not in `TRANSLATE_LANGUAGES` |
 | `MODEL_NOT_DOWNLOADED` | a needed model is missing |
+| `MODEL_MANAGER_FAILED` | Android could not check whether the models are on the device |
 | `TRANSLATION_FAILED` | ML Kit failed to translate |
 | `QUEUE_FULL` | 32 requests are already waiting |
 | `ABORTED` | `signal` was aborted |
@@ -64,7 +66,7 @@ Loads the translator for `from → to` so the next translation of that pair skip
 
 - Never downloads: rejects `MODEL_NOT_DOWNLOADED` when a model is missing.
 - `from === to` resolves without native work.
-- Rejects `UNSUPPORTED_LANGUAGE`, `TRANSLATION_FAILED`, `QUEUE_FULL`, `NATIVE_UNAVAILABLE`.
+- Rejects `UNSUPPORTED_LANGUAGE`, `MODEL_MANAGER_FAILED` (Android, checking the models failed), `TRANSLATION_FAILED`, `QUEUE_FULL`, `NATIVE_UNAVAILABLE`.
 
 ### `releaseTranslator()`
 
@@ -81,19 +83,28 @@ English (`TranslateLanguage.ENGLISH`) ships with the SDK: it is always available
 ### `downloadModel()`
 
 ```ts
-downloadModel(language: TranslateLanguage, options?: { wifiOnly?: boolean }): Promise<void>
+downloadModel(
+  language: TranslateLanguage,
+  options?: { wifiOnly?: boolean; signal?: AbortSignal }
+): Promise<void>
 ```
 
-- Resolves when the model is on the device; right away for `TranslateLanguage.ENGLISH` and for a model already downloaded.
+- Resolves when the model is on the device; right away for `TranslateLanguage.ENGLISH`.
+- Checks the device first: a model already downloaded resolves without a download, and its status goes straight to `ModelStatus.DOWNLOADED` without `ModelStatus.DOWNLOADING`.
 - `wifiOnly` (default `false`): wait for an unmetered network. The promise stays pending until then.
 - Concurrent calls for the same language share the download in flight, including the first call's `wifiOnly`.
 - Downloads do not go through the translation queue and never delay translations.
-- Rejects `UNSUPPORTED_LANGUAGE` or `MODEL_DOWNLOAD_FAILED`; the status becomes `ModelStatus.FAILED`. The next call starts a new attempt.
+- `signal`: aborting rejects this call with `ABORTED` right away; the download goes on for other callers and the status stays `ModelStatus.DOWNLOADING`. An already aborted signal rejects without starting a download. To stop the download for everyone, call [`deleteModel()`](#deletemodel).
+- Does not update a model already on the device; to get a newer version, delete the model and download it again.
+- Rejects `UNSUPPORTED_LANGUAGE`, `ABORTED`, or `MODEL_DOWNLOAD_FAILED` (the status then becomes `ModelStatus.FAILED`; the next call starts a new attempt).
 
 ### `downloadModels()`
 
 ```ts
-downloadModels(languages: readonly TranslateLanguage[], options?: { wifiOnly?: boolean }): Promise<void>
+downloadModels(
+  languages: readonly TranslateLanguage[],
+  options?: { wifiOnly?: boolean; signal?: AbortSignal }
+): Promise<void>
 ```
 
 Downloads several models, each as [`downloadModel()`](#downloadmodel) does (shared with downloads in flight, same `wifiOnly` for all; duplicates and `TranslateLanguage.ENGLISH` need no download).
@@ -101,6 +112,7 @@ Downloads several models, each as [`downloadModel()`](#downloadmodel) does (shar
 - Validates every code first: rejects `INVALID_INPUT` when `languages` is not an array and `UNSUPPORTED_LANGUAGE` for an unknown code, before any download starts.
 - Resolves when every model is on the device; an empty list resolves at once.
 - When some downloads fail, waits for the others, then rejects with the first `MODEL_DOWNLOAD_FAILED`. The [model state](#getmodelstate) of each language tells which ones failed; call again to retry them.
+- `signal`: aborting rejects this call with `ABORTED`; every download goes on.
 
 ### `deleteModel()`
 
@@ -108,7 +120,13 @@ Downloads several models, each as [`downloadModel()`](#downloadmodel) does (shar
 deleteModel(language: TranslateLanguage): Promise<void>
 ```
 
-Waits for a download in flight for that language and for queued translations, releases the translator, then deletes the model. No-op for `TranslateLanguage.ENGLISH`. Rejects `UNSUPPORTED_LANGUAGE` or `MODEL_MANAGER_FAILED`.
+Waits for queued translations, releases the translator, then deletes the model. No-op for `TranslateLanguage.ENGLISH`. Rejects `UNSUPPORTED_LANGUAGE` or `MODEL_MANAGER_FAILED`.
+
+A download of that language in flight, including one waiting for Wi-Fi, is cancelled without waiting for it:
+
+- Its callers reject `ABORTED` right away and the status becomes `ModelStatus.NOT_DOWNLOADED`.
+- ML Kit documents no way to stop a started download. If it still finishes later, the package deletes that model again, unless a new download of that language was requested since. Checks meanwhile report the model as missing.
+- A download of that language requested after `deleteModel()` starts once the deletion is done.
 
 ### `isModelDownloaded()`
 
@@ -117,6 +135,8 @@ isModelDownloaded(language: TranslateLanguage): Promise<boolean>
 ```
 
 Checks the device and updates the model state. `true` for `TranslateLanguage.ENGLISH` without native work. Rejects `UNSUPPORTED_LANGUAGE` or `MODEL_MANAGER_FAILED`.
+
+When a download of that language finishes or its model is deleted while the check runs, the check's answer may be outdated: it is ignored and the call resolves with the current state instead. The same applies to each language of `getDownloadedModels()`.
 
 ### `getDownloadedModels()`
 
@@ -136,7 +156,7 @@ getModelState(language: TranslateLanguage): ModelState
 
 The last known state, kept in memory for the app session. The returned object is frozen and stays the same until the state changes.
 
-`status` is one of the [`ModelStatus`](#modelstatus) values. A check that finds the model missing does not replace `ModelStatus.DOWNLOADING` or `ModelStatus.FAILED`. Throws `UNSUPPORTED_LANGUAGE` for a code outside `TRANSLATE_LANGUAGES`.
+`status` is one of the [`ModelStatus`](#modelstatus) values. A check that finds the model missing does not replace `ModelStatus.DOWNLOADING` or `ModelStatus.FAILED`, and a check outdated by a finished download or a delete changes nothing. Throws `UNSUPPORTED_LANGUAGE` for a code outside `TRANSLATE_LANGUAGES`.
 
 ### `ModelStatus`
 
@@ -161,6 +181,8 @@ subscribeModelState(listener: (language: TranslateLanguage) => void): () => void
 ```
 
 Calls `listener` with the language whose state changed. Returns the unsubscribe function.
+
+A listener that throws does not stop the other listeners or the call that changed the state (a download still resolves); its error is rethrown from a timer, so it still reaches the app's error handler.
 
 ### `useModelState()`
 
@@ -319,10 +341,10 @@ Each constant's value is its name (`TranslationErrorCode.QUEUE_FULL === 'QUEUE_F
 | `TranslationErrorCode.UNSUPPORTED_LANGUAGE` | every function taking a language |
 | `TranslationErrorCode.MODEL_NOT_DOWNLOADED` | `translate`, `prepareTranslator` |
 | `TranslationErrorCode.MODEL_DOWNLOAD_FAILED` | `downloadModel`, `downloadModels` |
-| `TranslationErrorCode.MODEL_MANAGER_FAILED` | `isModelDownloaded`, `getDownloadedModels`, `deleteModel` |
+| `TranslationErrorCode.MODEL_MANAGER_FAILED` | `isModelDownloaded`, `getDownloadedModels`, `deleteModel`; on Android also `translate`, `prepareTranslator` (checking the models) |
 | `TranslationErrorCode.TRANSLATION_FAILED` | `translate`, `prepareTranslator`, `releaseTranslator`, `deleteModel` (releasing first) |
 | `TranslationErrorCode.QUEUE_FULL` | `translate`, `prepareTranslator` |
-| `TranslationErrorCode.ABORTED` | `translate` |
+| `TranslationErrorCode.ABORTED` | `translate`, `downloadModel`, `downloadModels` (their `signal`, or `deleteModel` cancelling the download) |
 | `TranslationErrorCode.NATIVE_UNAVAILABLE` | every native call when the module is not linked |
 
 Messages are for logs; show your own text to users based on `code`. The package never logs the translated text.

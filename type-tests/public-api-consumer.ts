@@ -55,6 +55,11 @@ async function manageModels(): Promise<TranslateLanguage[]> {
   });
   const wanted: readonly TranslateLanguage[] = [TranslateLanguage.KOREAN, 'zh'];
   await downloadModels(wanted);
+  const controller = new AbortController();
+  await downloadModel(TranslateLanguage.KOREAN, { wifiOnly: true, signal: controller.signal });
+  await downloadModels(wanted, { signal: controller.signal });
+  // @ts-expect-error A signal must be an AbortSignal-like object.
+  await downloadModel(TranslateLanguage.KOREAN, { signal: true });
   // @ts-expect-error Every entry must be a language code.
   await downloadModels([TranslateLanguage.VIETNAMESE, 'vi-VN']);
   const downloaded: boolean = await isModelDownloaded(TranslateLanguage.VIETNAMESE);

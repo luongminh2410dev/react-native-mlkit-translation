@@ -2,6 +2,8 @@
 
 ## One translator, one queue
 
+You can download and translate between any number of languages. To keep memory low, only one language pair is loaded in memory at a time; translating another pair switches to it automatically.
+
 ```text
 Screen A ─┐
 Screen B ─┼─> translate() ─> FIFO queue ─> one native translator
@@ -35,7 +37,30 @@ controller.abort();
 | Running | Rejects `ABORTED` right away; the native translation finishes and its result is dropped. The next request starts only after that, so two translations never overlap. |
 | Finished | No effect. |
 
-There is no timeout: a request runs until ML Kit answers.
+There is no built-in timeout: a request runs until ML Kit answers. To give up after a delay, abort from a timer. The caller gets `ABORTED` on time, while the queue still waits for the native translation to finish before starting the next one:
+
+```ts
+async function translateWithin(text: string, ms: number): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await translate({
+      text,
+      from: TranslateLanguage.ENGLISH,
+      to: TranslateLanguage.VIETNAMESE,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+## Long text
+
+The package sets no length limit and passes the text to ML Kit in one call. A long text holds the queue until ML Kit answers, so other callers wait, and aborting it only drops the result. Split long documents into paragraphs or sentences and translate them one by one: other callers get their turn between the parts, and an abort stops the remaining parts.
+
+In the example self-test, a 7,241-character English text translated to Vietnamese in about 1.6 s on an iOS 18.6 simulator (Apple silicon Mac); expect longer on phones.
 
 ## Memory
 

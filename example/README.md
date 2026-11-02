@@ -1,14 +1,15 @@
 # Example fixtures
 
-Each fixture is a minimal app that renders the shared screen in [`shared/TranslationScreen.js`](shared/TranslationScreen.js). On launch it runs the self-test in [`shared/selfTest.js`](shared/selfTest.js): it downloads Vietnamese and Japanese with `downloadModels()`, prepares and switches pairs, checks 10 concurrent callers, abort, `QUEUE_FULL`, invalid input, delete and release against the real native module, and shows ✓/✗ per step (needs network the first time). Afterwards the screen downloads and deletes models (Wi-Fi only or any network), translates with abort, runs 10 concurrent requests, releases the translator (also on background), and shows the model state of the selected languages. It logs events, timings, and error codes — never the text — with the prefix `[MLKitTranslationExample]`.
+Each fixture is a minimal app that renders the shared screen in [`shared/TranslationScreen.js`](shared/TranslationScreen.js). On launch it runs the self-test in [`shared/selfTest.js`](shared/selfTest.js): it downloads Vietnamese and Japanese with `downloadModels()`, prepares and switches pairs, checks 10 concurrent callers, abort, `QUEUE_FULL`, invalid input, delete and release, cancels a download with `deleteModel()` and with a `signal` (French and Korean), and translates a 7,000-character text against the real native module, and shows ✓/✗ per step (needs network the first time). Afterwards the screen downloads and deletes models (Wi-Fi only or any network), translates with abort, runs 10 concurrent requests, releases the translator (also on background), and shows the model state of the selected languages. It logs events, timings, and error codes — never the text — with the prefix `[MLKitTranslationExample]`.
 
 ## Fixtures
 
 | Fixture | React Native | Platforms |
 | --- | --- | --- |
 | `rn-0.88` (committed) | 0.88.1 | Android + iOS, New Architecture |
+| `expo-sdk-58` (committed) | 0.88.1 (Expo SDK 58) | Android + iOS, New Architecture, development build |
 
-It was created with `example/scripts/create-fixture.sh` and keeps its lockfiles (`package-lock.json`, `Podfile.lock`).
+`rn-0.88` was created with `example/scripts/create-fixture.sh` and keeps its lockfiles (`package-lock.json`, `Podfile.lock`). `expo-sdk-58` was created with `create-expo-app` (blank template) and needs no config plugin: SDK 58 already targets iOS 16.4 and Android API 24. Its `android/` and `ios/` folders are generated, not committed.
 
 ## Check another React Native version
 
@@ -37,8 +38,19 @@ The script runs `npm pack` at the repository root, then installs the tarball and
 Android needs JDK 17 and the Android SDK; iOS needs Xcode 16+ and CocoaPods.
 
 ```bash
-cd example/rn-0.88/android && ./gradlew assembleRelease
+cd example/rn-0.88/android && ./gradlew :app:createBundleReleaseJsAndAssets --rerun assembleRelease
 cd example/rn-0.88/ios && pod install && open MLKitTranslationFixture0881.xcworkspace
+```
+
+Gradle's JS bundle task ignores changes inside `node_modules`, so after reinstalling the library or the shared screen a plain `assembleRelease` can ship the previous bundle; `--rerun` on the bundle task forces a fresh one. Xcode bundles on every build.
+
+Expo fixture (development build, not Expo Go):
+
+```bash
+cd example/expo-sdk-58
+npx expo prebuild --clean                          # generates android/ and ios/, installs the pods
+npx expo run:android --variant release
+npx expo run:ios --configuration Release
 ```
 
 Release builds bundle the JS, so they run without Metro. Keep the iOS app signed (the simulator's default ad-hoc signing is enough): ML Kit downloads models through a background `URLSession`, which fails in an unsigned build (`CODE_SIGNING_ALLOWED=NO`).
@@ -56,7 +68,8 @@ cd example/rn-0.88/android
 
 Read the log with `adb logcat -s ReactNativeJS | grep MLKitTranslationExample` (Android) or the Xcode console (iOS); the self-test logs one `selftest` line per step and a final `{"event":"done","passed":…,"failed":…}`. Scenarios the self-test does not cover:
 
-- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `ModelStatus.DOWNLOADING`);
+- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `ModelStatus.DOWNLOADING`), then Delete (resolves at once and cancels it);
+- a download while the app is in the background;
 - airplane mode with and without the model; relaunch offline after downloading;
 - `en → vi → en`, then another pair (translator switch);
 - download failure, then retry;

@@ -4,8 +4,9 @@
 
 - English (`TranslateLanguage.ENGLISH`) ships with the ML Kit SDK. It is always available and is never downloaded or deleted.
 - Every other language has its own model. A translation needs the models of both of its languages: English ↔ Vietnamese needs only the `VIETNAMESE` model, while Japanese → Vietnamese needs `JAPANESE` and `VIETNAMESE`.
+- ML Kit translates between two non-English languages through English, which can lower the quality ([Google](https://developers.google.com/ml-kit/language/translation)). On-device translation is intended for casual and simple text; check the quality for your languages.
 - Google lists language models at about 30 MB each. Treat this as an order of magnitude, not the exact size of a given model.
-- Once a model is on the device, translations work offline. Releasing the translator or restarting the app keeps the model.
+- You can keep as many models on the device as you need. Once the models of both languages are there, that pair translates offline. Releasing the translator or restarting the app keeps the model.
 
 ## Downloading
 
@@ -26,10 +27,12 @@ await downloadModels([VIETNAMESE, JAPANESE, FRENCH], { wifiOnly: true }); // sev
 | Other languages | Downloads of different languages are independent. |
 | Translations | Downloads never enter the translation queue; translations of other models keep running. |
 | Progress | Not reported: the status is `ModelStatus.DOWNLOADING` until it resolves or rejects. |
+| Cancelling | `signal` stops one caller waiting (`ABORTED`) while the download goes on. `deleteModel()` cancels it for every caller, including one waiting for Wi-Fi; see [below](#cancelling-a-download). |
 | Failure | Rejects `TranslationErrorCode.MODEL_DOWNLOAD_FAILED`; the status becomes `ModelStatus.FAILED` with the error. There is no automatic retry; the next call starts a new attempt. |
-| Already on the device | Resolves without downloading. |
+| Already on the device | Checked first: resolves without downloading, and the status never shows `ModelStatus.DOWNLOADING`. A model on the device is not updated; delete it and download it again to get a newer version. |
 | iOS signing | ML Kit downloads through a background `URLSession`, which needs a signed app. An unsigned build (for example `CODE_SIGNING_ALLOWED=NO`) gets `MODEL_DOWNLOAD_FAILED` right away; simulator builds with the default ad-hoc signing work. |
-| App killed or suspended | The OS may stop a pending download; call `downloadModel()` again on the next launch or foreground. |
+| App in the background | iOS: downloads use a background `URLSession` (`allowsBackgroundDownloading`); in an iOS 18.6 simulator check, a model downloaded while the app was in the background was installed within a second of returning to the foreground. Android: ML Kit downloads through the system `DownloadManager`, outside the app process; in an API 36 emulator check, a download started in the foreground finished while the app was in the background. The promise settles when the app runs again. |
+| App killed | The OS may stop a pending download, and its promise is lost with the JS runtime; call `downloadModel()` again on the next launch or foreground (a model already on the device resolves at once). |
 
 `translate()` never downloads. When a model is missing it rejects `MODEL_NOT_DOWNLOADED`, so the app decides when to download (for example on Wi-Fi only, or after asking the user).
 
@@ -49,10 +52,29 @@ prepare();
 AppState.addEventListener('change', (state) => state === 'active' && prepare());
 ```
 
+## Cancelling a download
+
+ML Kit documents no way to stop a started download. The package gives two ways out:
+
+```ts
+const controller = new AbortController();
+downloadModel(TranslateLanguage.KOREAN, { wifiOnly: true, signal: controller.signal }).catch((error) => {
+  // ABORTED after abort() or deleteModel(), otherwise MODEL_DOWNLOAD_FAILED
+});
+
+// The screen goes away: stop waiting, keep downloading for later.
+controller.abort();
+
+// The user taps "Cancel download": stop it for everyone and keep nothing.
+await deleteModel(TranslateLanguage.KOREAN);
+```
+
+`deleteModel()` rejects every caller of that download with `ABORTED` and deletes at once. If ML Kit still finishes the download later, the package deletes the model again, unless the app asked for that language since. Until the network allows it, a Wi-Fi-only download that was cancelled this way still waits in ML Kit and may use Wi-Fi later.
+
 ## Checking and deleting
 
 - `isModelDownloaded(language)` and `getDownloadedModels()` read the device and update the [model state](api-reference.md#getmodelstate).
 - `useModelState(language)` checks once while the status is still `ModelStatus.UNKNOWN`.
-- `deleteModel(language)` waits for queued translations, releases the translator, then deletes the model. Translations that need it then reject `MODEL_NOT_DOWNLOADED`.
+- `deleteModel(language)` cancels a download of that language in flight, waits for queued translations, releases the translator, then deletes the model. Translations that need it then reject `MODEL_NOT_DOWNLOADED`.
 
 Keep only the models the app needs: each one takes storage.

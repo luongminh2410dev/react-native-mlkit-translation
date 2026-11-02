@@ -3,6 +3,8 @@
 #import <MLKitCommon/MLKitCommon.h>
 #import <MLKitTranslate/MLKitTranslate.h>
 
+#include <atomic>
+
 // Error codes shared with Android and `src/translation-error.js`.
 static NSString *const MLKitTranslationUnsupportedLanguage = @"UNSUPPORTED_LANGUAGE";
 static NSString *const MLKitTranslationModelNotDownloaded = @"MODEL_NOT_DOWNLOADED";
@@ -39,8 +41,9 @@ static MLKTranslateLanguage _Nullable MLKitTranslationSupportedLanguage(NSString
   NSString *_translatorKey;
   BOOL _busy;
   BOOL _releaseWhenIdle;
-  // After invalidation no promise of the old React instance is settled.
-  BOOL _invalidated;
+  // After invalidation no promise of the old React instance is settled. Set on the calling thread, so blocks already
+  // queued on _queue see it too.
+  std::atomic<bool> _invalidated;
   // Callers waiting for the download in flight, per language.
   NSMutableDictionary<NSString *, NSMutableArray<MLKitTranslationDownloadWaiter *> *> *_downloadWaiters;
   id<NSObject> _downloadSucceededObserver;
@@ -229,8 +232,8 @@ RCT_EXPORT_MODULE(MLKitTranslation)
 
 - (void)invalidate
 {
+  _invalidated = true;
   dispatch_async(_queue, ^{
-    self->_invalidated = YES;
     [self->_downloadWaiters removeAllObjects];
     [self stopObservingDownloads];
     [self releaseTranslatorWhenIdle];

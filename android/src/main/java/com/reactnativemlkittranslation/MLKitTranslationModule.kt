@@ -11,6 +11,7 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -78,10 +79,12 @@ class MLKitTranslationModule(reactContext: ReactApplicationContext) : NativeMLKi
 
   override fun downloadModel(language: String, wifiOnly: Boolean, promise: Promise) {
     val model = remoteModel(language, promise) ?: return
-    val conditions = DownloadConditions.Builder().apply { if (wifiOnly) requireWifi() }.build()
-    modelManager.download(model, conditions)
-      .addOnSuccessListener { resolve(promise, null) }
-      .addOnFailureListener { error -> reject(promise, MODEL_DOWNLOAD_FAILED, error.message, error) }
+    // A model already on the device resolves without the network, as on iOS. A failed check leaves it to the download.
+    modelManager.isModelDownloaded(model)
+      .addOnSuccessListener { downloaded ->
+        if (downloaded) resolve(promise, null) else startDownload(model, wifiOnly, promise)
+      }
+      .addOnFailureListener { startDownload(model, wifiOnly, promise) }
   }
 
   override fun deleteModel(language: String, promise: Promise) {
@@ -133,6 +136,13 @@ class MLKitTranslationModule(reactContext: ReactApplicationContext) : NativeMLKi
     super.invalidate()
   }
 
+  private fun startDownload(model: TranslateRemoteModel, wifiOnly: Boolean, promise: Promise) {
+    val conditions = DownloadConditions.Builder().apply { if (wifiOnly) requireWifi() }.build()
+    modelManager.download(model, conditions)
+      .addOnSuccessListener { resolve(promise, null) }
+      .addOnFailureListener { error -> reject(promise, MODEL_DOWNLOAD_FAILED, error.message, error) }
+  }
+
   private fun languagePair(sourceLanguage: String, targetLanguage: String, promise: Promise): LanguagePair? {
     val source = TranslateLanguage.fromLanguageTag(sourceLanguage)
     val target = TranslateLanguage.fromLanguageTag(targetLanguage)
@@ -149,9 +159,16 @@ class MLKitTranslationModule(reactContext: ReactApplicationContext) : NativeMLKi
    * [promise] and returns `null` otherwise. Call [finishTranslation] once the translator is no longer used.
    */
   private fun acquireTranslator(pair: LanguagePair, promise: Promise): Translator? {
-    val missing = setOf(pair.source, pair.target).filter { language ->
-      language != TranslateLanguage.ENGLISH &&
-        !Tasks.await(modelManager.isModelDownloaded(TranslateRemoteModel.Builder(language).build()))
+    val missing = try {
+      setOf(pair.source, pair.target).filter { language ->
+        language != TranslateLanguage.ENGLISH &&
+          !Tasks.await(modelManager.isModelDownloaded(TranslateRemoteModel.Builder(language).build()))
+      }
+    } catch (error: ExecutionException) {
+      // The model manager failed, not the translator.
+      val cause = error.cause ?: error
+      reject(promise, MODEL_MANAGER_FAILED, cause.message, cause)
+      return null
     }
     if (missing.isNotEmpty()) {
       reject(promise, MODEL_NOT_DOWNLOADED, "Model not downloaded: ${missing.joinToString()}.")

@@ -36,10 +36,10 @@ export async function flushPromises() {
   }
 }
 
-/** A native module mock whose methods all resolve; override any method per test. */
+/** Native module mock: every method resolves and no model is on the device. Override any method per test. */
 export function createNativeModule(overrides = {}) {
   return {
-    isModelDownloaded: jest.fn(async () => true),
+    isModelDownloaded: jest.fn(async () => false),
     getDownloadedModels: jest.fn(async () => ['en']),
     downloadModel: jest.fn(async () => undefined),
     deleteModel: jest.fn(async () => undefined),

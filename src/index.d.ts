@@ -82,10 +82,11 @@ export declare function isTranslateLanguage(value: unknown): value is TranslateL
  * - `UNSUPPORTED_LANGUAGE`: a code outside {@link TRANSLATE_LANGUAGES}
  * - `MODEL_NOT_DOWNLOADED`: a model needed by the translation is not on the device
  * - `MODEL_DOWNLOAD_FAILED`: the download failed
- * - `MODEL_MANAGER_FAILED`: checking, listing, or deleting models failed
+ * - `MODEL_MANAGER_FAILED`: checking, listing, or deleting models failed (on Android, also the model check of a
+ *   translation)
  * - `TRANSLATION_FAILED`: the translator failed
  * - `QUEUE_FULL`: 32 translations are already waiting
- * - `ABORTED`: the request's `signal` was aborted
+ * - `ABORTED`: the call's `signal` was aborted, or `deleteModel()` cancelled the download
  * - `NATIVE_UNAVAILABLE`: the native module is not linked (rebuild the app; not available in Expo Go)
  */
 export declare const TranslationErrorCode: {
@@ -171,6 +172,8 @@ export type ModelState = {
 export type DownloadModelOptions = {
   /** Wait for an unmetered network (Wi-Fi) before downloading. Defaults to `false`. */
   wifiOnly?: boolean;
+  /** Aborting rejects this call with `ABORTED`; the download goes on. `deleteModel()` cancels it. */
+  signal?: TranslationAbortSignal;
 };
 
 /** Always `true` for `TranslateLanguage.ENGLISH`. */
@@ -179,26 +182,37 @@ export declare function isModelDownloaded(language: TranslateLanguage): Promise<
 /** Languages whose model is on the device, always including `TranslateLanguage.ENGLISH`. */
 export declare function getDownloadedModels(): Promise<TranslateLanguage[]>;
 
-/** Concurrent calls for the same language share one download. Resolves right away for `TranslateLanguage.ENGLISH`. */
+/**
+ * Concurrent calls for the same language share one download. Resolves right away for `TranslateLanguage.ENGLISH`, and
+ * without downloading for a model already on the device. Rejects `ABORTED` when `signal` aborts or `deleteModel()`
+ * cancels the download.
+ */
 export declare function downloadModel(language: TranslateLanguage, options?: DownloadModelOptions): Promise<void>;
 
 /**
  * Downloads several models, each shared with a download in flight. Resolves when all are on the device; otherwise
  * rejects with the first failure after the other downloads settle. Rejects `INVALID_INPUT` when `languages` is not an
- * array and `UNSUPPORTED_LANGUAGE` before downloading anything when a code is unknown.
+ * array and `UNSUPPORTED_LANGUAGE` before downloading anything when a code is unknown. Rejects `ABORTED` when `signal`
+ * aborts (the downloads go on).
  */
 export declare function downloadModels(
   languages: readonly TranslateLanguage[],
   options?: DownloadModelOptions
 ): Promise<void>;
 
-/** Releases the translator and deletes the model. No-op for `TranslateLanguage.ENGLISH`. */
+/**
+ * Releases the translator and deletes the model. Cancels a download of that language in flight (its callers reject
+ * `ABORTED`; a model it still brings is removed again). No-op for `TranslateLanguage.ENGLISH`.
+ */
 export declare function deleteModel(language: TranslateLanguage): Promise<void>;
 
 /** Last known model state; the same object until the state changes. Throws `UNSUPPORTED_LANGUAGE` for other codes. */
 export declare function getModelState(language: TranslateLanguage): ModelState;
 
-/** Calls `listener` with the language whose model state changed. Returns the unsubscribe function. */
+/**
+ * Calls `listener` with the language whose model state changed. Returns the unsubscribe function. A listener that
+ * throws does not stop the others; its error is rethrown from a timer.
+ */
 export declare function subscribeModelState(listener: (language: TranslateLanguage) => void): () => void;
 
 /** React hook for {@link getModelState}; checks the device once while the status is `ModelStatus.UNKNOWN`. */
