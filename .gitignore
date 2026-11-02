@@ -1,0 +1,31 @@
+node_modules/
+*.tgz
+.DS_Store
+*.log
+
+# Code review graph: generated database and local MCP integrations
+.code-review-graph/
+.mcp.json
+.cursor/mcp.json
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Build and test output
+coverage/
+android/build/
+android/.gradle/
+android/.cxx/
+ios/build/
+
+# Example fixtures: generated apps, packed library, native build output
+example/.tarballs/
+example/generated-rn-*/
+example/**/Pods/
+example/**/build/
+example/**/.gradle/
+example/**/*.xcworkspace/xcuserdata/
+example/**/vendor/
+
+# Local agent plans (not published)
+docs/superpowers/

@@ -1,0 +1,55 @@
+name: Bug report
+description: Wrong translation behavior, model download problem, build failure, or crash
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: Expected result, actual result, and steps to reproduce. Leave out private text you translated.
+    validations:
+      required: true
+  - type: input
+    id: library-version
+    attributes:
+      label: Library version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: react-native-version
+    attributes:
+      label: React Native version (and Expo SDK, if any)
+      placeholder: 0.83.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - iOS
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: Pixel 8, Android 16 / iPhone 15, iOS 26
+    validations:
+      required: true
+  - type: input
+    id: languages
+    attributes:
+      label: Languages (from → to)
+      placeholder: en → vi
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error code and message
+      description: The `code` and `message` of the TranslationError, and native logs if any.
+      render: text

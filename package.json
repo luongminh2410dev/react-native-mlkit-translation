@@ -1,0 +1,96 @@
+{
+  "name": "react-native-mlkit-translation",
+  "version": "0.1.0",
+  "description": "On-device text translation for React Native with Google ML Kit: 59 languages, offline after the model download, one shared translator and a FIFO queue. TurboModule for Android and iOS.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": [
+    "android",
+    "ios",
+    "src",
+    "RNMLKitTranslation.podspec",
+    "react-native.config.js",
+    "README.md",
+    "CHANGELOG.md",
+    "!android/build",
+    "!android/.gradle",
+    "!android/.cxx",
+    "!android/src/test",
+    "!ios/build",
+    "!**/__tests__"
+  ],
+  "codegenConfig": {
+    "name": "RNMLKitTranslationSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.reactnativemlkittranslation"
+    },
+    "ios": {
+      "modulesProvider": {
+        "MLKitTranslation": "MLKitTranslation"
+      }
+    }
+  },
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.codegen-spec.json"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/__tests__"
+    ],
+    "testMatch": [
+      "**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "react-native",
+    "translation",
+    "translate",
+    "offline-translation",
+    "on-device",
+    "mlkit",
+    "ml-kit",
+    "android",
+    "ios",
+    "turbo-module",
+    "new-architecture",
+    "native-module"
+  ],
+  "author": "minhla",
+  "contributors": [
+    {
+      "name": "Codex (AI coding assistant)"
+    },
+    {
+      "name": "Claude (AI coding assistant)"
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/luongminh2410dev/react-native-mlkit-translation#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luongminh2410dev/react-native-mlkit-translation.git"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": ">=0.76"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "@eslint/js": "^9.39.5",
+    "babel-jest": "^29.7.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "jest": "^29.7.0",
+    "react": "^18.3.1",
+    "react-native": "^0.88.1",
+    "react-test-renderer": "^18.3.1",
+    "typescript": "^7.0.2"
+  }
+}

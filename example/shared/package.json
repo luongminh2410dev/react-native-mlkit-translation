@@ -1,0 +1,12 @@
+{
+  "name": "mlkit-translation-example-shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Screen shared by every example fixture. Installed as a copied local package (install-links).",
+  "main": "TranslationScreen.js",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-mlkit-translation": "*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  // Checks the Codegen spec against React Native's types. skipLibCheck ignores errors inside React Native's own declarations.
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": []
+  },
+  "include": ["src/NativeMLKitTranslation.ts"]
+}

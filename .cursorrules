@@ -1,0 +1,3 @@
+# Cursor Instructions — react-native-mlkit-translation
+
+Read [AGENTS.md](AGENTS.md) for project conventions, execution authorization, the skill routing table, and code-review-graph usage. Canonical skills live in [`.agents/skills/`](.agents/skills/). Read the relevant skill before its task. The finishing pass requires an explicit user request.

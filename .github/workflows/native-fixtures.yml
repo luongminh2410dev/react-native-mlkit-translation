@@ -1,0 +1,71 @@
+name: Native fixtures
+
+# Manual only: builds a fixture against the packed library on Android (with the Kotlin unit tests) and iOS
+# (simulator build).
+on:
+  workflow_dispatch:
+    inputs:
+      fixture:
+        description: Committed fixture under example/, or "generated" to create one for react_native_version
+        required: true
+        type: choice
+        options: [rn-0.88, generated]
+      react_native_version:
+        description: React Native version (0.76+) for a generated fixture, e.g. 0.83.1
+        required: false
+        type: string
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - run: npm ci
+      - name: Prepare the fixture
+        id: fixture
+        # Inputs go through env, not `${{ }}` in the script, so they are never parsed as shell code.
+        env:
+          FIXTURE: ${{ inputs.fixture }}
+          RN_VERSION: ${{ inputs.react_native_version }}
+        run: example/scripts/prepare-ci-fixture.sh
+      # Kotlin tests are not in the tarball, so they build the library from the repository sources.
+      - name: Kotlin unit tests
+        working-directory: ${{ steps.fixture.outputs.dir }}/android
+        run: ./gradlew --no-daemon -PuseLibrarySource=true :react-native-mlkit-translation:testDebugUnitTest
+      - name: Build against the packed library
+        working-directory: ${{ steps.fixture.outputs.dir }}/android
+        run: ./gradlew --no-daemon assembleRelease
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Prepare the fixture
+        id: fixture
+        env:
+          FIXTURE: ${{ inputs.fixture }}
+          RN_VERSION: ${{ inputs.react_native_version }}
+        run: example/scripts/prepare-ci-fixture.sh
+      - name: Install pods
+        working-directory: ${{ steps.fixture.outputs.dir }}/ios
+        run: pod install
+      # Build check only: an unsigned app cannot download ML Kit models at runtime.
+      - name: Build for the simulator
+        working-directory: ${{ steps.fixture.outputs.dir }}/ios
+        run: |
+          workspace="$(ls -d *.xcworkspace | head -1)"
+          scheme="${workspace%.xcworkspace}"
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

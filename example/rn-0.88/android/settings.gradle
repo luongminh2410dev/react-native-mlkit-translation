@@ -1,0 +1,12 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'MLKitTranslationFixture0881'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
+
+// Fixture-only: `-PuseLibrarySource=true` builds the library from the repository instead of the installed tarball,
+// which excludes `android/src/test`. Use it to run `:react-native-mlkit-translation:testDebugUnitTest`.
+if (settings.providers.gradleProperty('useLibrarySource').getOrElse('false') == 'true') {
+  project(':react-native-mlkit-translation').projectDir = new File(rootDir, '../../../android')
+}
