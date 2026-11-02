@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — 2026-11-02
+
+### Documentation
+
+- README shows the npm downloads, New Architecture, and TypeScript badges.
+
 ## 0.1.0 — 2026-11-02
 
 ### Added
