@@ -5,9 +5,13 @@
 **On-device text translation for React Native with Google ML Kit — 59 languages, offline once a model is downloaded.**
 
 [![npm version](https://img.shields.io/npm/v/react-native-mlkit-translation?color=cb3837&logo=npm)](https://www.npmjs.com/package/react-native-mlkit-translation)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-mlkit-translation?color=cb3837)](https://www.npmjs.com/package/react-native-mlkit-translation)
 [![CI](https://img.shields.io/github/actions/workflow/status/luongminh2410dev/react-native-mlkit-translation/ci.yml?branch=main&label=CI&logo=github)](https://github.com/luongminh2410dev/react-native-mlkit-translation/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/react-native-mlkit-translation)](LICENSE)
+<br />
 [![platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-3DDC84)](docs/compatibility-matrix.md)
+[![New Architecture](https://img.shields.io/badge/New%20Architecture-TurboModule-61DAFB?logo=react&logoColor=black)](docs/compatibility-matrix.md)
+[![TypeScript](https://img.shields.io/badge/types-TypeScript-3178C6?logo=typescript&logoColor=white)](src/index.d.ts)
 
 </div>
 
