@@ -343,7 +343,9 @@ describe('useModelState', () => {
       return null;
     }
     TestRenderer.act(() => {
-      TestRenderer.create(React.createElement(React.Fragment, null, React.createElement(Probe), React.createElement(Probe)));
+      TestRenderer.create(
+        React.createElement(React.Fragment, null, React.createElement(Probe), React.createElement(Probe))
+      );
     });
     await TestRenderer.act(flushPromises);
 

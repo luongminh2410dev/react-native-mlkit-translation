@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
-import { BUILT_IN_LANGUAGE, TRANSLATE_LANGUAGES, isTranslateLanguage } from './languages';
-import { createModelStore } from './model-store';
-import { TranslationError, toTranslationError } from './translation-error';
+import { BUILT_IN_LANGUAGE, TRANSLATE_LANGUAGES, TranslateLanguage, isTranslateLanguage } from './languages';
+import { ModelStatus, createModelStore } from './model-store';
+import { TranslationError, TranslationErrorCode, toTranslationError } from './translation-error';
 import { createTranslationQueue } from './translation-queue';
 
-export { TRANSLATE_LANGUAGES, isTranslateLanguage, TranslationError };
+export {
+  ModelStatus,
+  TRANSLATE_LANGUAGES,
+  TranslateLanguage,
+  TranslationError,
+  TranslationErrorCode,
+  isTranslateLanguage
+};
 
 const MAX_PENDING_TRANSLATIONS = 32;
 
-/** Resolves the native module through the Codegen spec. Required lazily so importing the package never touches native code. */
+/**
+ * Resolves the native module through the Codegen spec. Required lazily so importing the package never touches native
+ * code.
+ */
 function getNativeModule() {
   return require('./NativeMLKitTranslation').default;
 }
@@ -17,7 +27,7 @@ function getNativeModule() {
 async function callNative(method, args, fallbackCode) {
   const nativeModule = getNativeModule();
   if (!nativeModule || typeof nativeModule[method] !== 'function') {
-    throw new TranslationError('NATIVE_UNAVAILABLE');
+    throw new TranslationError(TranslationErrorCode.NATIVE_UNAVAILABLE);
   }
   try {
     return await nativeModule[method](...args);
@@ -31,7 +41,10 @@ const store = createModelStore(callNative);
 
 function assertLanguage(language) {
   if (!isTranslateLanguage(language)) {
-    throw new TranslationError('UNSUPPORTED_LANGUAGE', `'${String(language)}' is not an ML Kit translation language.`);
+    throw new TranslationError(
+      TranslationErrorCode.UNSUPPORTED_LANGUAGE,
+      `'${String(language)}' is not an ML Kit translation language.`
+    );
   }
 }
 
@@ -47,8 +60,8 @@ function withLanguage(language, operation) {
 
 /** Native call that needs the translator; a missing model refreshes both states so they match the disk. */
 function callWithTranslator(method, args, from, to) {
-  return callNative(method, args, 'TRANSLATION_FAILED').catch((error) => {
-    if (error.code === 'MODEL_NOT_DOWNLOADED') {
+  return callNative(method, args, TranslationErrorCode.TRANSLATION_FAILED).catch((error) => {
+    if (error.code === TranslationErrorCode.MODEL_NOT_DOWNLOADED) {
       // Native code does not say which side is missing.
       [from, to].forEach((language) => {
         store.refresh(language).catch(noop);
@@ -74,7 +87,7 @@ export function translate(request) {
   const { text, from, to, signal } = request || {};
   try {
     if (typeof text !== 'string' || text.trim() === '') {
-      throw new TranslationError('INVALID_INPUT');
+      throw new TranslationError(TranslationErrorCode.INVALID_INPUT);
     }
     assertLanguage(from);
     assertLanguage(to);
@@ -83,7 +96,9 @@ export function translate(request) {
   }
 
   if (from === to) {
-    return signal && signal.aborted ? Promise.reject(new TranslationError('ABORTED')) : Promise.resolve(text);
+    return signal && signal.aborted
+      ? Promise.reject(new TranslationError(TranslationErrorCode.ABORTED))
+      : Promise.resolve(text);
   }
 
   return queue.enqueue(() => callWithTranslator('translate', [text, from, to], from, to), { signal });
@@ -116,23 +131,30 @@ export function prepareTranslator(request) {
  * requested later create a new one. Downloaded models stay on disk.
  */
 export function releaseTranslator() {
-  return queue.enqueueBarrier(() => callNative('releaseTranslator', [], 'TRANSLATION_FAILED'));
+  return queue.enqueueBarrier(() => callNative('releaseTranslator', [], TranslationErrorCode.TRANSLATION_FAILED));
 }
 
-/** Whether the model for `language` is on the device. Always `true` for `'en'`. Updates the model state. */
+/**
+ * Whether the model for `language` is on the device. Always `true` for `TranslateLanguage.ENGLISH`. Updates the model
+ * state.
+ */
 export function isModelDownloaded(language) {
   return withLanguage(language, () => store.refresh(language));
 }
 
-/** Languages whose model is on the device, always including `'en'`. Updates the model state of every language. */
+/**
+ * Languages whose model is on the device, always including `TranslateLanguage.ENGLISH`. Updates the model state of
+ * every language.
+ */
 export function getDownloadedModels() {
   return store.refreshAll();
 }
 
 /**
- * Downloads the model for `language`. Concurrent calls for the same language share the download in flight, including its
- * network condition. With `wifiOnly: true` the download waits for an unmetered network. Resolves right away for `'en'`
- * and for a model already on the device. Rejects with `MODEL_DOWNLOAD_FAILED`; a later call starts a new attempt.
+ * Downloads the model for `language`. Concurrent calls for the same language share the download in flight, including
+ * its network condition. With `wifiOnly: true` the download waits for an unmetered network. Resolves right away for
+ * `TranslateLanguage.ENGLISH` and for a model already on the device. Rejects with `MODEL_DOWNLOAD_FAILED`; a later
+ * call starts a new attempt.
  */
 export function downloadModel(language, options) {
   const wifiOnly = Boolean(options && options.wifiOnly);
@@ -141,15 +163,18 @@ export function downloadModel(language, options) {
 
 /**
  * Downloads the models of several languages at once, each like {@link downloadModel} (shared with downloads in flight,
- * same `wifiOnly` for all). Duplicates and `'en'` need no download. Validates every code before starting any download.
- * Resolves when every model is on the device. When some downloads fail, waits for the others, then rejects with the
- * first failure; each language's model state tells which ones failed.
+ * same `wifiOnly` for all). Duplicates and `TranslateLanguage.ENGLISH` need no download. Validates every code before
+ * starting any download. Resolves when every model is on the device. When some downloads fail, waits for the others,
+ * then rejects with the first failure; each language's model state tells which ones failed.
  */
 export function downloadModels(languages, options) {
   const wifiOnly = Boolean(options && options.wifiOnly);
   try {
     if (!Array.isArray(languages)) {
-      throw new TranslationError('INVALID_INPUT', 'downloadModels() expects an array of language codes.');
+      throw new TranslationError(
+        TranslationErrorCode.INVALID_INPUT,
+        'downloadModels() expects an array of language codes.'
+      );
     }
     languages.forEach(assertLanguage);
   } catch (error) {
@@ -167,7 +192,7 @@ export function downloadModels(languages, options) {
 
 /**
  * Deletes the model for `language` from the device. Waits for a download in flight for that language and for queued
- * translations, releases the translator, then deletes. No-op for `'en'`, which ships with the SDK.
+ * translations, releases the translator, then deletes. No-op for `TranslateLanguage.ENGLISH`, which ships with the SDK.
  */
 export function deleteModel(language) {
   return withLanguage(language, () => {
@@ -176,8 +201,8 @@ export function deleteModel(language) {
     }
     return store.waitForDownload(language).then(() =>
       queue.enqueueBarrier(async () => {
-        await callNative('releaseTranslator', [], 'TRANSLATION_FAILED');
-        await callNative('deleteModel', [language], 'MODEL_MANAGER_FAILED');
+        await callNative('releaseTranslator', [], TranslationErrorCode.TRANSLATION_FAILED);
+        await callNative('deleteModel', [language], TranslationErrorCode.MODEL_MANAGER_FAILED);
         store.markNotDownloaded(language);
       })
     );
@@ -186,7 +211,8 @@ export function deleteModel(language) {
 
 /**
  * Last known state of the model for `language`: `{ status, error }`. The object stays the same until the state changes.
- * `'unknown'` until a check, download, or translation tells otherwise. Throws `UNSUPPORTED_LANGUAGE` for other codes.
+ * `ModelStatus.UNKNOWN` until a check, download, or translation tells otherwise. Throws `UNSUPPORTED_LANGUAGE` for
+ * other codes.
  */
 export function getModelState(language) {
   assertLanguage(language);
@@ -199,8 +225,8 @@ export function subscribeModelState(listener) {
 }
 
 /**
- * React hook for {@link getModelState}. Checks the device once when the state is `'unknown'`; a failed check leaves it
- * `'unknown'`.
+ * React hook for {@link getModelState}. Checks the device once when the state is `ModelStatus.UNKNOWN`; a failed check
+ * leaves it unknown.
  */
 export function useModelState(language) {
   assertLanguage(language);
@@ -218,7 +244,7 @@ export function useModelState(language) {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   useEffect(() => {
-    if (store.getState(language).status === 'unknown') {
+    if (store.getState(language).status === ModelStatus.UNKNOWN) {
       store.refresh(language).catch(noop);
     }
   }, [language]);

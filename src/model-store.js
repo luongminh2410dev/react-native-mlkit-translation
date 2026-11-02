@@ -1,9 +1,19 @@
 import { BUILT_IN_LANGUAGE, TRANSLATE_LANGUAGES } from './languages';
+import { TranslationErrorCode } from './translation-error';
 
-const UNKNOWN = Object.freeze({ status: 'unknown', error: null });
-const NOT_DOWNLOADED = Object.freeze({ status: 'not-downloaded', error: null });
-const DOWNLOADING = Object.freeze({ status: 'downloading', error: null });
-const DOWNLOADED = Object.freeze({ status: 'downloaded', error: null });
+/** Values of `ModelState.status`. */
+export const ModelStatus = Object.freeze({
+  UNKNOWN: 'unknown',
+  NOT_DOWNLOADED: 'not-downloaded',
+  DOWNLOADING: 'downloading',
+  DOWNLOADED: 'downloaded',
+  FAILED: 'failed'
+});
+
+const UNKNOWN = Object.freeze({ status: ModelStatus.UNKNOWN, error: null });
+const NOT_DOWNLOADED = Object.freeze({ status: ModelStatus.NOT_DOWNLOADED, error: null });
+const DOWNLOADING = Object.freeze({ status: ModelStatus.DOWNLOADING, error: null });
+const DOWNLOADED = Object.freeze({ status: ModelStatus.DOWNLOADED, error: null });
 
 /**
  * Model state per language, its listeners, and the download and presence check in flight per language.
@@ -38,7 +48,7 @@ export function createModelStore(callNative) {
       setState(language, DOWNLOADED);
       return;
     }
-    if (downloads.has(language) || getState(language).status === 'failed') {
+    if (downloads.has(language) || getState(language).status === ModelStatus.FAILED) {
       return;
     }
     setState(language, NOT_DOWNLOADED);
@@ -54,7 +64,7 @@ export function createModelStore(callNative) {
       return inFlight;
     }
 
-    const promise = callNative('isModelDownloaded', [language], 'MODEL_MANAGER_FAILED').then(
+    const promise = callNative('isModelDownloaded', [language], TranslationErrorCode.MODEL_MANAGER_FAILED).then(
       (result) => {
         checks.delete(language);
         const downloaded = result === true;
@@ -71,7 +81,7 @@ export function createModelStore(callNative) {
   }
 
   async function refreshAll() {
-    const reported = await callNative('getDownloadedModels', [], 'MODEL_MANAGER_FAILED');
+    const reported = await callNative('getDownloadedModels', [], TranslationErrorCode.MODEL_MANAGER_FAILED);
     const downloaded = new Set(Array.isArray(reported) ? reported : []);
     downloaded.add(BUILT_IN_LANGUAGE);
     const languages = TRANSLATE_LANGUAGES.filter((language) => downloaded.has(language));
@@ -92,14 +102,14 @@ export function createModelStore(callNative) {
       return inFlight;
     }
 
-    const promise = callNative('downloadModel', [language, wifiOnly], 'MODEL_DOWNLOAD_FAILED').then(
+    const promise = callNative('downloadModel', [language, wifiOnly], TranslationErrorCode.MODEL_DOWNLOAD_FAILED).then(
       () => {
         downloads.delete(language);
         setState(language, DOWNLOADED);
       },
       (error) => {
         downloads.delete(language);
-        setState(language, Object.freeze({ status: 'failed', error }));
+        setState(language, Object.freeze({ status: ModelStatus.FAILED, error }));
         throw error;
       }
     );

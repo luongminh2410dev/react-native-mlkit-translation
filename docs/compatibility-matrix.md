@@ -15,5 +15,5 @@ Fixtures for any version can be generated with `example/scripts/create-fixture.s
 Known platform limits:
 
 - ML Kit iOS APIs run on 64-bit devices only.
-- Not available in Expo Go.
+- Expo: development and production builds only, not Expo Go. Set the iOS deployment target to 15.5 with `expo-build-properties` (`ios.deploymentTarget`); not verified yet.
 - The Legacy Architecture is not supported.

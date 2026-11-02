@@ -21,7 +21,10 @@ Pass an `AbortSignal` to drop requests that are no longer needed, for example wh
 
 ```ts
 const controller = new AbortController();
-translate({ text, from: 'en', to: 'vi', signal: controller.signal }).then(show, handleError);
+translate({ text, from: TranslateLanguage.ENGLISH, to: TranslateLanguage.VIETNAMESE, signal: controller.signal }).then(
+  show,
+  handleError
+);
 // later
 controller.abort();
 ```

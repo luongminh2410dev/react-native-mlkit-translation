@@ -11,13 +11,13 @@ Adapted from the jupi-app `shared-layer-change-safety` skill. In a published lib
 
 - JS exports in `src/index.js` and their declarations in `src/index.d.ts`.
 - Error codes and which call rejects with which code; `TranslationError` shape (`name`, `code`, `cause`).
-- Language list `TRANSLATE_LANGUAGES` and the `TranslateLanguage` union.
-- Behavior consumers depend on: FIFO order, 32 waiting translations, abort semantics, release/delete barriers, `from === to` passthrough, `translate` never downloading, download sharing per language, `wifiOnly` default `false`, `en` always downloaded, model state values and transitions, hook refresh-once behavior.
+- Enum constants and their values: `TranslateLanguage` (names and codes), `TranslationErrorCode`, `ModelStatus`, and `TRANSLATE_LANGUAGES`. Renaming or removing a constant key or changing its value is breaking; adding a key is a minor change.
+- Behavior consumers depend on: FIFO order, 32 waiting translations, abort semantics, release/delete barriers, `from === to` passthrough, `translate` never downloading, download sharing per language, `wifiOnly` default `false`, `TranslateLanguage.ENGLISH` always downloaded, model state values and transitions, hook refresh-once behavior.
 - Codegen spec (`src/NativeMLKitTranslation.ts`), `codegenConfig`, native module name `MLKitTranslation`, Kotlin package/class names used by `react-native.config.js`.
 - `package.json`: `name`, `main`, `types`, `files`, `peerDependencies`. Podspec name, iOS deployment target, `GoogleMLKit/Translate` version.
 - `android/build.gradle` defaults: `compileSdkVersion`, `minSdkVersion`, Java/Kotlin targets, `com.google.mlkit:translate` version.
 
-Pure additions (a new export, a new optional option) need no separate approval but still need types, docs (README API table and `docs/api-reference.md`), and a minor version bump at release. A new error code that an existing call can now reject with is a behavior change for exhaustive consumers: treat it as at least minor and call it out.
+Pure additions (a new export, a new optional option, a new constant key) need no separate approval but still need types, docs (README API table and `docs/api-reference.md`), and a minor version bump at release. A new error code that an existing call can now reject with is a behavior change for exhaustive consumers: treat it as at least minor and call it out.
 
 ## For existing surface
 

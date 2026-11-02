@@ -17,7 +17,10 @@ describe('translate', () => {
 
   it('runs requests from several callers in order, each with its own result', async () => {
     const first = deferred();
-    const translateMock = jest.fn().mockImplementationOnce(() => first.promise).mockResolvedValueOnce('Be careful.');
+    const translateMock = jest
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce('Be careful.');
     const nativeModule = createNativeModule({ translate: translateMock });
     const { library } = loadLibraryWithMockedReactNative({ nativeModule });
 
@@ -32,13 +35,16 @@ describe('translate', () => {
     expect(translateMock).toHaveBeenNthCalledWith(2, 'Cẩn thận.', 'vi', 'en');
   });
 
-  it.each([[''], ['   \n\t'], [undefined], [42]])('rejects INVALID_INPUT for text %p without native work', async (text) => {
-    const nativeModule = createNativeModule();
-    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+  it.each([[''], ['   \n\t'], [undefined], [42]])(
+    'rejects INVALID_INPUT for text %p without native work',
+    async (text) => {
+      const nativeModule = createNativeModule();
+      const { library } = loadLibraryWithMockedReactNative({ nativeModule });
 
-    await expect(library.translate({ text, from: 'en', to: 'vi' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
-    expect(nativeModule.translate).not.toHaveBeenCalled();
-  });
+      await expect(library.translate({ text, from: 'en', to: 'vi' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+      expect(nativeModule.translate).not.toHaveBeenCalled();
+    }
+  );
 
   it('rejects INVALID_INPUT without a request object', async () => {
     const { library } = loadLibraryWithMockedReactNative({ nativeModule: createNativeModule() });

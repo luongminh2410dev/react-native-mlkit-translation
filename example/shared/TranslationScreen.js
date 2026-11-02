@@ -7,13 +7,19 @@ import {
   isTranslateLanguage,
   releaseTranslator,
   translate,
+  TranslateLanguage,
   useModelState
 } from 'react-native-mlkit-translation';
 
 import { runSelfTest } from './selfTest';
 
 const TAG = '[MLKitTranslationExample]';
-const QUICK_LANGUAGES = ['en', 'vi', 'ja', 'fr'];
+const QUICK_LANGUAGES = [
+  TranslateLanguage.ENGLISH,
+  TranslateLanguage.VIETNAMESE,
+  TranslateLanguage.JAPANESE,
+  TranslateLanguage.FRENCH
+];
 
 function log(event, data) {
   // Logs metadata only, never the text, like the library itself.
@@ -88,8 +94,8 @@ function Button({ title, onPress }) {
 }
 
 export default function TranslationScreen({ autoRunSelfTest = false }) {
-  const [from, setFrom] = useState('en');
-  const [to, setTo] = useState('vi');
+  const [from, setFrom] = useState(TranslateLanguage.ENGLISH);
+  const [to, setTo] = useState(TranslateLanguage.VIETNAMESE);
   const [text, setText] = useState('Be careful, the floor is slippery.');
   const [output, setOutput] = useState('');
   const [status, setStatus] = useState('');
@@ -128,7 +134,10 @@ export default function TranslationScreen({ autoRunSelfTest = false }) {
     // The pattern the docs recommend: free the translator's memory in the background.
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'background') {
-        releaseTranslator().then(() => log('release', { reason: 'background' }), () => {});
+        releaseTranslator().then(
+          () => log('release', { reason: 'background' }),
+          () => {}
+        );
       }
     });
     return () => subscription.remove();
@@ -173,7 +182,10 @@ export default function TranslationScreen({ autoRunSelfTest = false }) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>ML Kit translation</Text>
         <View style={styles.row}>
-          <Button title={selfTest.running ? 'Self-test running…' : 'Run self-test'} onPress={selfTest.running ? () => {} : startSelfTest} />
+          <Button
+            title={selfTest.running ? 'Self-test running…' : 'Run self-test'}
+            onPress={selfTest.running ? () => {} : startSelfTest}
+          />
           {!selfTest.running && selfTest.steps.length > 0 ? (
             <Text>
               {selfTest.steps.filter((result) => result.ok).length}/{selfTest.steps.length} passed
@@ -195,7 +207,12 @@ export default function TranslationScreen({ autoRunSelfTest = false }) {
           <Button title="10 at once" onPress={runConcurrent} />
           <Button
             title="Release"
-            onPress={() => releaseTranslator().then(() => setStatus('Translator released'), (e) => setStatus(describeError(e)))}
+            onPress={() =>
+              releaseTranslator().then(
+                () => setStatus('Translator released'),
+                (e) => setStatus(describeError(e))
+              )
+            }
           />
         </View>
         <Text style={styles.output}>{output}</Text>
@@ -204,10 +221,14 @@ export default function TranslationScreen({ autoRunSelfTest = false }) {
 
         <Text style={styles.section}>Models</Text>
         {Array.from(new Set([from, to])).map((language) => (
-          <ModelRow key={language} language={language} onResult={(message) => {
-            setStatus(message);
-            refreshDownloaded();
-          }} />
+          <ModelRow
+            key={language}
+            language={language}
+            onResult={(message) => {
+              setStatus(message);
+              refreshDownloaded();
+            }}
+          />
         ))}
         <Text>On device: {downloaded.join(', ')}</Text>
       </ScrollView>

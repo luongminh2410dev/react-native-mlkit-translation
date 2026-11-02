@@ -1,9 +1,10 @@
-import { TranslationError } from './translation-error';
+import { TranslationError, TranslationErrorCode } from './translation-error';
 
 /**
  * Runs native work one task at a time, in the order it was accepted.
  *
- * - `enqueue(run, { signal })`: a translation. At most `maxPending` wait behind the running one; more reject `QUEUE_FULL`.
+ * - `enqueue(run, { signal })`: a translation. At most `maxPending` wait behind the running one; more reject
+ *   `QUEUE_FULL`.
  *   Aborting a waiting task removes it. Aborting the running task rejects its caller right away, but the next task
  *   starts only after the native call settles, so two native calls never overlap.
  * - `enqueueBarrier(run)`: work that must not overlap a translation (releasing or deleting models). Runs after every
@@ -38,7 +39,7 @@ export function createTranslationQueue({ maxPending }) {
         waitingTaskCount -= 1;
       }
     }
-    settle(item, () => item.reject(new TranslationError('ABORTED')));
+    settle(item, () => item.reject(new TranslationError(TranslationErrorCode.ABORTED)));
   }
 
   function drain() {
@@ -74,11 +75,11 @@ export function createTranslationQueue({ maxPending }) {
   function add(run, { signal, countsTowardLimit }) {
     return new Promise((resolve, reject) => {
       if (signal && signal.aborted) {
-        reject(new TranslationError('ABORTED'));
+        reject(new TranslationError(TranslationErrorCode.ABORTED));
         return;
       }
       if (countsTowardLimit && waitingTaskCount >= maxPending) {
-        reject(new TranslationError('QUEUE_FULL'));
+        reject(new TranslationError(TranslationErrorCode.QUEUE_FULL));
         return;
       }
 

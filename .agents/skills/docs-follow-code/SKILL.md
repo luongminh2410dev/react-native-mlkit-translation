@@ -12,7 +12,7 @@ Update existing behavior descriptions in the same task, nearest to farthest:
 1. JSDoc in `src/*.js` and comments in Kotlin/Objective-C++ for the changed symbol: inputs, results, error codes, side effects.
 2. `src/index.d.ts`: types for every export and returned value.
 3. `docs/`: `api-reference.md` (every export: signature, results, errors), `models-and-downloads.md`, `queue-and-memory.md`, `privacy-and-attribution.md`, `compatibility-matrix.md`, `testing-with-jest.md`.
-4. `README.md`: short pitch, installation (rebuild, `pod install`, iOS 15.5), quick usage, API summary table, links to `docs/`. Keep details out of the README; add them to the matching `docs/` page.
+4. `README.md`: only what is needed to integrate right away — one-line pitch, a few features, installation with platform requirements (rebuild, `pod install`, iOS 15.5, Android minSdk), one minimal usage example, a grouped API table, links to `docs/`. Do not add more examples, options, or edge cases to the README; put them in the matching `docs/` page and link it.
 5. `package.json` `description` / `keywords` when the scope of the library changes.
 6. `AGENTS.md` and the skills in `.agents/skills/` when structure, tooling, scripts, or verification commands change.
 
@@ -27,7 +27,7 @@ README, comments, and types describe how the library behaves now, in the present
 - Verification records: "tested on Pixel 8", "tests pass". These go in the task report; docs state lasting limits only (e.g. "does not run in Expo Go", "requires iOS 15.5").
 - APIs, files, or values that no longer exist.
 
-Keep a reason only when it explains a current non-obvious choice (a threading choice, an SDK limit), in one clause. Prefer tables and short bullets; keep README examples runnable and matching the exported names.
+Keep a reason only when it explains a current non-obvious choice (a threading choice, an SDK limit), in one clause. Prefer tables and short bullets; keep README examples runnable and matching the exported names. Examples use the enum constants (`TranslateLanguage.VIETNAMESE`, `TranslationErrorCode.MODEL_NOT_DOWNLOADED`, `ModelStatus.DOWNLOADED`), not string literals; tables of values show the constant and its string.
 
 ## Report status in the task, not in the docs
 

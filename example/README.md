@@ -1,6 +1,6 @@
 # Example fixtures
 
-Each fixture is a minimal app that renders the shared screen in [`shared/TranslationScreen.js`](shared/TranslationScreen.js). On launch it runs the self-test in [`shared/selfTest.js`](shared/selfTest.js): it downloads `vi` and `ja` with `downloadModels()`, prepares and switches pairs, checks 10 concurrent callers, abort, `QUEUE_FULL`, invalid input, delete and release against the real native module, and shows ✓/✗ per step (needs network the first time). Afterwards the screen downloads and deletes models (Wi-Fi only or any network), translates with abort, runs 10 concurrent requests, releases the translator (also on background), and shows the model state of the selected languages. It logs events, timings, and error codes — never the text — with the prefix `[MLKitTranslationExample]`.
+Each fixture is a minimal app that renders the shared screen in [`shared/TranslationScreen.js`](shared/TranslationScreen.js). On launch it runs the self-test in [`shared/selfTest.js`](shared/selfTest.js): it downloads Vietnamese and Japanese with `downloadModels()`, prepares and switches pairs, checks 10 concurrent callers, abort, `QUEUE_FULL`, invalid input, delete and release against the real native module, and shows ✓/✗ per step (needs network the first time). Afterwards the screen downloads and deletes models (Wi-Fi only or any network), translates with abort, runs 10 concurrent requests, releases the translator (also on background), and shows the model state of the selected languages. It logs events, timings, and error codes — never the text — with the prefix `[MLKitTranslationExample]`.
 
 ## Fixtures
 
@@ -56,7 +56,7 @@ cd example/rn-0.88/android
 
 Read the log with `adb logcat -s ReactNativeJS | grep MLKitTranslationExample` (Android) or the Xcode console (iOS); the self-test logs one `selftest` line per step and a final `{"event":"done","passed":…,"failed":…}`. Scenarios the self-test does not cover:
 
-- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `downloading`);
+- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `ModelStatus.DOWNLOADING`);
 - airplane mode with and without the model; relaunch offline after downloading;
 - `en → vi → en`, then another pair (translator switch);
 - download failure, then retry;
