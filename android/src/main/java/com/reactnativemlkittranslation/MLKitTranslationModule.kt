@@ -15,6 +15,8 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * ML Kit on-device translation. Model management calls go straight to [RemoteModelManager]; everything that touches the
@@ -36,6 +38,9 @@ class MLKitTranslationModule(reactContext: ReactApplicationContext) : NativeMLKi
 
     // Short text translated by prepareTranslator() so ML Kit loads the models; the result is dropped.
     private const val WARM_UP_TEXT = "Hello"
+
+    // Shared by both model checks; excludes queue wait, translator creation and translation.
+    private val MODEL_CHECK_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(10)
   }
 
   private data class LanguagePair(val source: String, val target: String)
@@ -160,16 +165,25 @@ class MLKitTranslationModule(reactContext: ReactApplicationContext) : NativeMLKi
    */
   private fun acquireTranslator(pair: LanguagePair, promise: Promise): Translator? {
     val missing = try {
-      setOf(pair.source, pair.target).filter { language ->
-        language != TranslateLanguage.ENGLISH &&
-          !Tasks.await(modelManager.isModelDownloaded(TranslateRemoteModel.Builder(language).build()))
+      findMissingModels(
+        listOf(pair.source, pair.target), TranslateLanguage.ENGLISH, MODEL_CHECK_TIMEOUT_NANOS,
+      ) { language, remainingNanos ->
+        Tasks.await(
+          modelManager.isModelDownloaded(TranslateRemoteModel.Builder(language).build()),
+          remainingNanos,
+          TimeUnit.NANOSECONDS,
+        )
       }
+    } catch (error: TimeoutException) {
+      reject(promise, MODEL_MANAGER_FAILED, "Model availability check timed out after 10 seconds.", error)
+      return null
     } catch (error: ExecutionException) {
       // The model manager failed, not the translator.
       val cause = error.cause ?: error
       reject(promise, MODEL_MANAGER_FAILED, cause.message, cause)
       return null
     }
+    if (invalidated) return null
     if (missing.isNotEmpty()) {
       reject(promise, MODEL_NOT_DOWNLOADED, "Model not downloaded: ${missing.joinToString()}.")
       return null

@@ -17,7 +17,7 @@ await downloadModel(VIETNAMESE, { wifiOnly: true });
 await downloadModels([VIETNAMESE, JAPANESE, FRENCH], { wifiOnly: true }); // several at once
 ```
 
-`downloadModels()` starts every download at once, waits for all of them, and rejects with the first failure; each language's model state tells which ones failed.
+`downloadModels()` starts every download at once, waits for all members to settle, and rejects with the first failure in deduplicated input order; each language's model state tells which ones failed. Deleting one member contributes `ABORTED` but does not stop the batch waiting for the others or override an earlier input member's failure. Abort the batch signal to stop waiting immediately.
 
 | Behavior | Detail |
 | --- | --- |
@@ -69,7 +69,7 @@ controller.abort();
 await deleteModel(TranslateLanguage.KOREAN);
 ```
 
-`deleteModel()` rejects every caller of that download with `ABORTED` and deletes at once. If ML Kit still finishes the download later, the package deletes the model again, unless the app asked for that language since. Until the network allows it, a Wi-Fi-only download that was cancelled this way still waits in ML Kit and may use Wi-Fi later.
+`deleteModel()` rejects single-model callers of that download with `ABORTED` immediately; a batch still waits for its other members. Deletion waits for queued translations and the native delete operation, without waiting for the cancelled download. If ML Kit still finishes the download later, the package deletes the model again, unless the app asked for that language since. Until the network allows it, a Wi-Fi-only download that was cancelled this way still waits in ML Kit and may use Wi-Fi later.
 
 ## Checking and deleting
 

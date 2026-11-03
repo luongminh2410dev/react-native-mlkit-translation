@@ -82,8 +82,8 @@ export declare function isTranslateLanguage(value: unknown): value is TranslateL
  * - `UNSUPPORTED_LANGUAGE`: a code outside {@link TRANSLATE_LANGUAGES}
  * - `MODEL_NOT_DOWNLOADED`: a model needed by the translation is not on the device
  * - `MODEL_DOWNLOAD_FAILED`: the download failed
- * - `MODEL_MANAGER_FAILED`: checking, listing, or deleting models failed (on Android, also the model check of a
- *   translation)
+ * - `MODEL_MANAGER_FAILED`: deleting a model failed (both platforms); reading/listing models or checking models
+ *   before translate/prepare failed (Android only, including the shared 10-second pre-translation check timeout)
  * - `TRANSLATION_FAILED`: the translator failed
  * - `QUEUE_FULL`: 32 translations are already waiting
  * - `ABORTED`: the call's `signal` was aborted, or `deleteModel()` cancelled the download
@@ -132,7 +132,8 @@ export type TranslateRequest = {
 /**
  * Translates on the device between any two {@link TranslateLanguage} whose models are downloaded, one request at a time
  * in FIFO order. Up to 32 requests wait behind the running one.
- * Never downloads a model: rejects with `MODEL_NOT_DOWNLOADED` when one is missing.
+ * Never downloads a model: rejects with `MODEL_NOT_DOWNLOADED` when one is missing. Android model checks share
+ * a 10-second budget and reject `MODEL_MANAGER_FAILED` on failure/timeout; queue wait and translation are excluded.
  */
 export declare function translate(request: TranslateRequest): Promise<string>;
 
@@ -143,7 +144,8 @@ export type TranslatorPair = {
 
 /**
  * Loads the translator for `from → to` ahead of time, in the translation queue, so the next translation of that pair
- * skips the load. Never downloads: rejects `MODEL_NOT_DOWNLOADED` when a model is missing.
+ * skips the load. Never downloads: rejects `MODEL_NOT_DOWNLOADED` when a model is missing. Android model checks
+ * share a 10-second budget and reject `MODEL_MANAGER_FAILED` on failure/timeout; queue wait and warm-up are excluded.
  */
 export declare function prepareTranslator(pair: TranslatorPair): Promise<void>;
 
@@ -176,10 +178,16 @@ export type DownloadModelOptions = {
   signal?: TranslationAbortSignal;
 };
 
-/** Always `true` for `TranslateLanguage.ENGLISH`. */
+/**
+ * Always `true` for `TranslateLanguage.ENGLISH`. Model-manager failures reject `MODEL_MANAGER_FAILED` on Android.
+ * Invalid codes reject `UNSUPPORTED_LANGUAGE`; native work rejects `NATIVE_UNAVAILABLE` when the module is missing.
+ */
 export declare function isModelDownloaded(language: TranslateLanguage): Promise<boolean>;
 
-/** Languages whose model is on the device, always including `TranslateLanguage.ENGLISH`. */
+/**
+ * Languages whose model is on the device, always including `TranslateLanguage.ENGLISH`.
+ * Model-manager failures reject `MODEL_MANAGER_FAILED` on Android; a missing module rejects `NATIVE_UNAVAILABLE`.
+ */
 export declare function getDownloadedModels(): Promise<TranslateLanguage[]>;
 
 /**
@@ -191,9 +199,10 @@ export declare function downloadModel(language: TranslateLanguage, options?: Dow
 
 /**
  * Downloads several models, each shared with a download in flight. Resolves when all are on the device; otherwise
- * rejects with the first failure after the other downloads settle. Rejects `INVALID_INPUT` when `languages` is not an
+ * rejects with the first failure in deduplicated input order after all settle. Deleting one model cancels that
+ * member with `ABORTED`, but the batch still waits for the others. Rejects `INVALID_INPUT` when `languages` is not an
  * array and `UNSUPPORTED_LANGUAGE` before downloading anything when a code is unknown. Rejects `ABORTED` when `signal`
- * aborts (the downloads go on).
+ * aborts, without waiting for the other models (the downloads go on).
  */
 export declare function downloadModels(
   languages: readonly TranslateLanguage[],
@@ -202,7 +211,8 @@ export declare function downloadModels(
 
 /**
  * Releases the translator and deletes the model. Cancels a download of that language in flight (its callers reject
- * `ABORTED`; a model it still brings is removed again). No-op for `TranslateLanguage.ENGLISH`.
+ * `ABORTED` for single-model calls; batches wait for their other models). Waits for queued translations and native
+ * deletion; a model the cancelled download still brings is removed again. No-op for `TranslateLanguage.ENGLISH`.
  */
 export declare function deleteModel(language: TranslateLanguage): Promise<void>;
 
