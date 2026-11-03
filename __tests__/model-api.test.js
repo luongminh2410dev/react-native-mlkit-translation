@@ -176,6 +176,67 @@ describe('download signal', () => {
 });
 
 describe('downloadModels', () => {
+  it('waits for the other language after delete cancels one member of a batch', async () => {
+    const vi = deferred();
+    const ja = deferred();
+    const nativeModule = createNativeModule({
+      downloadModel: jest.fn((language) => (language === 'vi' ? vi.promise : ja.promise))
+    });
+    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+    let settled = false;
+    const batch = library.downloadModels(['vi', 'ja']).catch((error) => {
+      settled = true;
+      return error;
+    });
+    await flushPromises();
+    await library.deleteModel('vi');
+    expect(settled).toBe(false);
+    expect(library.getModelState('vi').status).toBe('not-downloaded');
+    expect(library.getModelState('ja').status).toBe('downloading');
+    ja.resolve();
+    await expect(batch).resolves.toMatchObject({ code: 'ABORTED' });
+    expect(library.getModelState('ja').status).toBe('downloaded');
+    vi.reject(nativeError('E_NETWORK'));
+    await flushPromises();
+  });
+
+  it('lets the batch signal stop waiting after delete cancels just one member', async () => {
+    const download = deferred();
+    const nativeModule = createNativeModule({ downloadModel: jest.fn(() => download.promise) });
+    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+    const controller = new AbortController();
+    const batch = library.downloadModels(['vi', 'ja'], { signal: controller.signal });
+    await flushPromises();
+    await library.deleteModel('vi');
+    controller.abort();
+    await expect(batch).rejects.toMatchObject({ code: 'ABORTED' });
+    expect(library.getModelState('ja').status).toBe('downloading');
+    const remaining = library.downloadModel('ja');
+    download.resolve();
+    await remaining;
+    expect(library.getModelState('ja').status).toBe('downloaded');
+    await flushPromises();
+  });
+
+  it.each([
+    [['vi', 'ja', 'vi'], 'MODEL_DOWNLOAD_FAILED'],
+    [['ja', 'vi', 'ja'], 'ABORTED']
+  ])('reports the first failure in input order for %j, regardless of settlement order', async (languages, code) => {
+    const vi = deferred();
+    const ja = deferred();
+    const nativeModule = createNativeModule({
+      downloadModel: jest.fn((language) => (language === 'vi' ? vi.promise : ja.promise))
+    });
+    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+    const batch = library.downloadModels(languages);
+    await flushPromises();
+    await library.deleteModel('ja');
+    vi.reject(nativeError('E_NETWORK'));
+    await expect(batch).rejects.toMatchObject({ code });
+    ja.reject(nativeError('E_NETWORK'));
+    await flushPromises();
+  });
+
   it('downloads every language of the list once, skipping English and duplicates', async () => {
     const nativeModule = createNativeModule();
     const { library } = loadLibraryWithMockedReactNative({ nativeModule });

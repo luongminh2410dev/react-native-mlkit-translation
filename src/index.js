@@ -106,7 +106,8 @@ function callWithTranslator(method, args, from, to) {
  *
  * Rejects with a {@link TranslationError}: `INVALID_INPUT` for empty or whitespace-only text, `UNSUPPORTED_LANGUAGE`,
  * `MODEL_NOT_DOWNLOADED` when a non-English model is missing (never downloads it), `MODEL_MANAGER_FAILED` when checking
- * the models fails (Android), `TRANSLATION_FAILED`, `QUEUE_FULL`, `ABORTED`, `NATIVE_UNAVAILABLE`.
+ * the models fails or exceeds the shared 10-second budget (Android), `TRANSLATION_FAILED`, `QUEUE_FULL`, `ABORTED`,
+ * `NATIVE_UNAVAILABLE`. This budget excludes queue wait and translation itself.
  */
 export function translate(request) {
   const { text, from, to, signal } = request || {};
@@ -133,6 +134,7 @@ export function translate(request) {
  * Loads the translator for `from → to` ahead of time, so the next translation of that pair skips the load. Runs in the
  * translation queue like a translation; the translator stays loaded until another pair is used or
  * {@link releaseTranslator} runs. Never downloads: rejects `MODEL_NOT_DOWNLOADED` when a model is missing.
+ * On Android, the model checks share a 10-second budget; failure or timeout rejects `MODEL_MANAGER_FAILED`.
  * Resolves without native work when `from === to`.
  */
 export function prepareTranslator(request) {
@@ -162,7 +164,8 @@ export function releaseTranslator() {
 /**
  * Whether the model for `language` is on the device. Always `true` for `TranslateLanguage.ENGLISH`. Updates the model
  * state. An answer that arrives after a download of that language finished or its model was deleted is outdated: the
- * current state answers instead.
+ * current state answers instead. Model-manager failures reject `MODEL_MANAGER_FAILED` on Android; invalid input
+ * rejects `UNSUPPORTED_LANGUAGE`, and a missing native module rejects `NATIVE_UNAVAILABLE` when native work is needed.
  */
 export function isModelDownloaded(language) {
   return withLanguage(language, () => store.refresh(language));
@@ -170,7 +173,8 @@ export function isModelDownloaded(language) {
 
 /**
  * Languages whose model is on the device, always including `TranslateLanguage.ENGLISH`. Updates the model state of
- * every language.
+ * every language. Model-manager failures reject `MODEL_MANAGER_FAILED` on Android; a missing native module rejects
+ * `NATIVE_UNAVAILABLE`.
  */
 export function getDownloadedModels() {
   return store.refreshAll();
@@ -201,8 +205,9 @@ export function downloadModel(language, options) {
  * Downloads the models of several languages at once, each like {@link downloadModel} (shared with downloads in flight,
  * same `wifiOnly` for all). Duplicates and `TranslateLanguage.ENGLISH` need no download. Validates every code before
  * starting any download. Resolves when every model is on the device. When some downloads fail, waits for the others,
- * then rejects with the first failure; each language's model state tells which ones failed. `signal` stops this caller
- * waiting (`ABORTED`); the downloads go on.
+ * then rejects with the first failure in deduplicated input order (including `ABORTED` from deleting one model).
+ * Deleting one model does not stop the batch waiting for the others. `signal` stops this caller waiting immediately
+ * (`ABORTED`); the downloads go on.
  */
 export function downloadModels(languages, options) {
   const { wifiOnly, signal } = options || {};
@@ -235,9 +240,10 @@ export function downloadModels(languages, options) {
 
 /**
  * Deletes the model for `language` from the device. Cancels a download in flight for that language: its callers reject
- * `ABORTED` right away, and if ML Kit still finishes it (ML Kit offers no way to stop it), the model is removed again
- * unless a new download of that language was requested since. Waits for queued translations, releases the translator,
- * then deletes. Downloads of that language requested afterwards start once the deletion is done. No-op for
+ * `ABORTED` right away for single-model calls; a batch still waits for its other models. If ML Kit still finishes it
+ * (ML Kit offers no way to stop it), the model is removed again unless a new download of that language was requested
+ * since. Waits for queued translations, releases the translator, then deletes. Downloads of that language requested
+ * afterwards start once the deletion is done. No-op for
  * `TranslateLanguage.ENGLISH`, which ships with the SDK.
  */
 export function deleteModel(language) {

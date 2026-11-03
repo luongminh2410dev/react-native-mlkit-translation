@@ -7,6 +7,25 @@ import {
 } from './helpers/load-library-with-mocked-react-native';
 
 describe('translate', () => {
+  it.each(['translate', 'prepareTranslator'])('continues the queue after %s rejects a model-check timeout', async (method) => {
+    const check = deferred();
+    const nativeModule = createNativeModule({
+      translate: jest.fn(async () => 'next translation'),
+      [method]: jest.fn().mockImplementationOnce(() => check.promise).mockResolvedValue('next translation')
+    });
+    const { library } = loadLibraryWithMockedReactNative({ nativeModule });
+    const first = library[method]({ text: 'Hello', from: 'en', to: 'vi' });
+    const next = library.translate({ text: 'Next', from: 'en', to: 'ja' });
+    await flushPromises();
+    expect(nativeModule[method]).toHaveBeenCalledTimes(1);
+    expect(nativeModule.translate).not.toHaveBeenCalledWith('Next', 'en', 'ja');
+    check.reject(nativeError('MODEL_MANAGER_FAILED', 'Model check timed out.'));
+    await expect(first).rejects.toMatchObject({ code: 'MODEL_MANAGER_FAILED' });
+    await expect(next).resolves.toBe('next translation');
+    expect(nativeModule.translate).toHaveBeenLastCalledWith('Next', 'en', 'ja');
+    expect(library.getModelState('vi').status).toBe('unknown');
+  });
+
   it('passes the text and languages to native code unchanged', async () => {
     const nativeModule = createNativeModule({ translate: jest.fn(async () => 'Xin chào.') });
     const { library } = loadLibraryWithMockedReactNative({ nativeModule });

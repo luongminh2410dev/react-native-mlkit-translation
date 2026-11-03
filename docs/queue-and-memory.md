@@ -37,7 +37,9 @@ controller.abort();
 | Running | Rejects `ABORTED` right away; the native translation finishes and its result is dropped. The next request starts only after that, so two translations never overlap. |
 | Finished | No effect. |
 
-There is no built-in timeout: a request runs until ML Kit answers. To give up after a delay, abort from a timer. The caller gets `ABORTED` on time, while the queue still waits for the native translation to finish before starting the next one:
+On Android, the model-presence checks before `translate()` and `prepareTranslator()` share a 10-second budget. A failure or timeout rejects `TranslationErrorCode.MODEL_MANAGER_FAILED` without acquiring the translator, allowing the queue to continue. This budget starts when model checking runs and excludes time waiting in the queue, translator creation, warm-up, and translation itself. It does not cancel the underlying model-check Task.
+
+Translation itself has no built-in timeout: once translation starts, a request runs until ML Kit answers. To give up after a delay, abort from a timer. The caller gets `ABORTED` on time, while the queue still waits for the native translation to finish before starting the next one:
 
 ```ts
 async function translateWithin(text: string, ms: number): Promise<string> {

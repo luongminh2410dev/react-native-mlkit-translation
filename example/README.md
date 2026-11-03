@@ -64,11 +64,17 @@ cd example/rn-0.88/android
 ./gradlew -PuseLibrarySource=true :react-native-mlkit-translation:testDebugUnitTest
 ```
 
+## Native CI
+
+The Native fixtures workflow builds the packed library in both `rn-0.88` and `expo-sdk-58` on Android and iOS for pull requests and pushes to `main` that change `src/`, native code, fixtures, package/lockfile, autolinking, podspec, `.npmrc`, or the native workflow. Kotlin JVM tests run through the RN fixture against repository sources. Each job has a 60-minute limit; superseded automatic runs on the same event/ref are cancelled.
+
+Manual `workflow_dispatch` runs build only the selected fixture, including `generated` with a React Native version. These jobs compile and run JVM tests; they do not launch apps or run the device self-test. Documentation-only changes do not trigger these builds (except changes under `example/`, which is included as a whole).
+
 ## Check on a device
 
 Read the log with `adb logcat -s ReactNativeJS | grep MLKitTranslationExample` (Android) or the Xcode console (iOS); the self-test logs one `selftest` line per step and a final `{"event":"done","passed":…,"failed":…}`. Scenarios the self-test does not cover:
 
-- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `ModelStatus.DOWNLOADING`), then Delete (resolves at once and cancels it);
+- first download on Wi-Fi; download with Wi-Fi only while on mobile data (stays `ModelStatus.DOWNLOADING`), then Delete (cancels the download without waiting for it; deletion still waits for queued translations and native deletion);
 - a download while the app is in the background;
 - airplane mode with and without the model; relaunch offline after downloading;
 - `en → vi → en`, then another pair (translator switch);
