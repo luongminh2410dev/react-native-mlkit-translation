@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0 — 2026-11-03
+
+### Stable API
+
+- First stable release of the on-device translation, model management, queue, cancellation, and model-state APIs. Existing exports and signatures are unchanged from 0.1.2.
+
+### Fixed
+
+- Android: model-presence checks before `translate()` and `prepareTranslator()` share a 10-second timeout. A stalled check rejects `MODEL_MANAGER_FAILED` and lets the queue continue without acquiring a translator. Queue wait, translator creation, warm-up, and translation itself are outside this timeout. Consumers that previously waited longer than 10 seconds for these checks now receive an error.
+
+### CI and tests
+
+- Native CI builds the packed library in both React Native and Expo fixtures on Android and iOS for relevant pull requests and pushes to `main`; Kotlin tests run through the React Native fixture. Manual fixture selection remains available.
+- Regression coverage for the shared model-check time budget, queue recovery after model-check failure, partial batch cancellation, and batch error ordering.
+
+### Documentation
+
+- Clarify that deleting one model cancels single-model callers immediately, while a `downloadModels()` batch waits for its other members and reports the first failure in input order. A batch signal stops waiting immediately; SDK downloads may continue.
+- Distinguish Android-only model read/check errors from model deletion errors on both platforms, and separate the Android model-check timeout from translation cancellation.
+
 ## 0.1.2 — 2026-11-03
 
 ### Added
