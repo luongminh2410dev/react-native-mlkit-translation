@@ -1,8 +1,32 @@
 name: Native fixtures
 
-# Manual only: builds a fixture against the packed library on Android (with the Kotlin unit tests, except in an Expo
-# fixture) and iOS (simulator build).
+# Builds the packed library in RN and Expo on native-affecting PRs/pushes; manual runs select one fixture.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'example/**'
+      - 'RNMLKitTranslation.podspec'
+      - 'react-native.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.npmrc'
+      - '.github/workflows/native-fixtures.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'example/**'
+      - 'RNMLKitTranslation.podspec'
+      - 'react-native.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.npmrc'
+      - '.github/workflows/native-fixtures.yml'
   workflow_dispatch:
     inputs:
       fixture:
@@ -15,9 +39,21 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: native-fixtures-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   android:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.fixture) || '["rn-0.88","expo-sdk-58"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,13 +68,13 @@ jobs:
         id: fixture
         # Inputs go through env, not `${{ }}` in the script, so they are never parsed as shell code.
         env:
-          FIXTURE: ${{ inputs.fixture }}
+          FIXTURE: ${{ matrix.fixture }}
           RN_VERSION: ${{ inputs.react_native_version }}
         run: example/scripts/prepare-ci-fixture.sh
       # Kotlin tests are not in the tarball, so they build the library from the repository sources (React Native CLI
       # fixtures only: an Expo fixture has no useLibrarySource switch).
       - name: Kotlin unit tests
-        if: ${{ !startsWith(inputs.fixture, 'expo-') }}
+        if: ${{ !startsWith(matrix.fixture, 'expo-') }}
         working-directory: ${{ steps.fixture.outputs.dir }}/android
         run: ./gradlew --no-daemon -PuseLibrarySource=true :react-native-mlkit-translation:testDebugUnitTest
       - name: Build against the packed library
@@ -47,6 +83,11 @@ jobs:
 
   ios:
     runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.fixture) || '["rn-0.88","expo-sdk-58"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,7 +97,7 @@ jobs:
       - name: Prepare the fixture
         id: fixture
         env:
-          FIXTURE: ${{ inputs.fixture }}
+          FIXTURE: ${{ matrix.fixture }}
           RN_VERSION: ${{ inputs.react_native_version }}
         run: example/scripts/prepare-ci-fixture.sh
       - name: Install pods
